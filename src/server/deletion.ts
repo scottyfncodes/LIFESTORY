@@ -28,14 +28,17 @@ export async function purgeDeletedProject(db: DbClient, projectId: string): Prom
   const project = await db.query.memoirProjects.findFirst({ where: eq(memoirProjects.id, projectId) });
   if (!project) return { alreadyGone: true };
   if (!project.deletedAt) return { skipped: "not_marked_deleted" };
-  const assets = await db.select().from(mediaAssets).where(and(eq(mediaAssets.projectId, projectId), isNull(mediaAssets.deletedAt)));
-  const storage = await getStorage();
+  const assets = (await db.select().from(mediaAssets).where(and(eq(mediaAssets.projectId, projectId), isNull(mediaAssets.deletedAt)))).filter(
+    (a) => a.storageProvider !== "pending",
+  );
+  // Only touch storage when there is something stored: environments without a
+  // storage provider must still be able to delete projects that have no audio.
+  const storage = assets.length > 0 ? await getStorage() : null;
   let removed = 0;
   let failed = 0;
   for (const asset of assets) {
-    if (asset.storageProvider === "pending") continue;
     try {
-      await storage.delete(asset.storageKey);
+      await storage!.delete(asset.storageKey);
       await db.update(mediaAssets).set({ deletedAt: new Date(), retentionStatus: "deleted" }).where(eq(mediaAssets.id, asset.id));
       removed += 1;
     } catch (error) {
@@ -75,12 +78,19 @@ export async function expireRetainedAudio(db: DbClient, limit = 50): Promise<num
   return count;
 }
 
-/** Deletes everything a user owns, for account deletion. Projects shared with others are left to their owners. */
-export async function deleteAllOwnedProjects(db: DbClient, userId: string): Promise<number> {
-  const owned = await db.select({ id: memoirProjects.id }).from(memoirProjects).where(and(eq(memoirProjects.ownerUserId, userId), isNull(memoirProjects.deletedAt)));
+/**
+ * Account deletion: purge every project the user owns *before* the user row
+ * is removed. Deleting the user cascades to projects, their media rows and
+ * queued jobs, so anything deferred to a job would lose the storage keys and
+ * orphan the recordings. Runs synchronously; if any recording cannot be
+ * removed it throws, which aborts the account deletion with nothing lost
+ * (projects stay soft-deleted and inaccessible, and a retry resumes).
+ */
+export async function purgeAllOwnedProjects(db: DbClient, userId: string): Promise<number> {
+  const owned = await db.select({ id: memoirProjects.id }).from(memoirProjects).where(eq(memoirProjects.ownerUserId, userId));
   for (const p of owned) {
-    await db.update(memoirProjects).set({ deletedAt: new Date(), projectStatus: "deleted" }).where(eq(memoirProjects.id, p.id));
-    await enqueueJob(db, { projectId: p.id, jobType: "delete_project_media", idempotencyKey: `delete_project:${p.id}`, payload: { userId }, maxAttempts: 10 });
+    await db.update(memoirProjects).set({ deletedAt: new Date(), projectStatus: "deleted" }).where(and(eq(memoirProjects.id, p.id), isNull(memoirProjects.deletedAt)));
+    await purgeDeletedProject(db, p.id);
   }
   return owned.length;
 }

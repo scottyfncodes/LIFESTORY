@@ -29,7 +29,7 @@ This documents what the code does. It is not a legal compliance statement; have 
 
 - **Recording**: deleted from storage immediately; the transcript is kept on the turn.
 - **Project**: marked deleted (all access fails closed at once) → job removes every recording from storage → project row is hard-deleted, cascading to every dependent table. The job retries until storage deletion succeeds.
-- **Account**: Better Auth `deleteUser` (password re-entry) → all owned projects go through project deletion → user row deleted (cascades to sessions and accounts).
+- **Account**: Better Auth `deleteUser` (password re-entry) → every owned project, including ones already marked deleted, has its recordings removed from storage and its rows deleted synchronously → only then is the user row deleted. If any recording cannot be removed, the account deletion is aborted and can be retried; nothing is orphaned.
 - **Backups**: Neon point-in-time history on the current project is 6 hours; Vercel Blob deletions are immediate at the API and propagate through its CDN within minutes. After those windows nothing remains. The settings page states this next to the delete control.
 
 ## Not implemented / not claimed
