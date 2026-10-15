@@ -14,7 +14,7 @@
 - The Anthropic adapter, OpenAI and Deepgram adapters are implemented against the documented APIs and exercised only with deterministic fixtures. First use with real keys should be watched in Vercel logs (`ai.operation_failed`, `media.transcription_failed`).
 - The Vercel team is on the Hobby plan, so the job-drain cron in `vercel.json` runs once a day (`0 4 * * *`); an hourly schedule was rejected at deploy time. The `after()` drain after each request and the UI's status polling handle the normal path; the daily cron is the safety net for anything an instance dropped. Upgrading to Pro allows a more frequent schedule.
 
-- Conversation Weave direct uploads (`@vercel/blob/client` `upload` → `handleUpload` token) and presigned playback (`issueSignedToken` + `presignUrl`) have not run against a real Blob store. Token contents are verified with the SDK's own generator in tests; the first Preview run should confirm an upload of a long M4A, playback seeking, the 5-minute link expiry recovery, and deletion.
+- Conversation Weave direct uploads (`upload` → `handleUpload` with a read-write token, or `uploadPresigned` → `handleUploadPresigned` under OIDC) and presigned playback (`issueSignedToken` + `presignUrl`) have not been exercised end to end from a browser against a real Blob store. Token contents are verified with the SDK's own generator in tests; the first Preview run should confirm an upload of a long M4A, playback seeking, the 5-minute link expiry recovery, and deletion.
 
 ## Product gaps
 

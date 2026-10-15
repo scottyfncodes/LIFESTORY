@@ -194,7 +194,7 @@ export async function deleteWeave(db: DbClient, userId: string, projectId: strin
 // ---------------------------------------------------------------------------
 
 export type UploadInstructions =
-  | { mode: "direct"; pathname: string; contentType: string; multipart: boolean }
+  | { mode: "direct"; flow: "client-token" | "presigned"; pathname: string; contentType: string; multipart: boolean }
   | { mode: "server"; contentType: string };
 
 /**
@@ -276,7 +276,9 @@ export async function reserveRecording(
 }
 
 function instructions(storage: StorageProvider, storageKey: string, contentType: string, size: number): UploadInstructions {
-  if (storage.supportsDirectUpload) return { mode: "direct", pathname: storageKey, contentType, multipart: size > 8 * 1024 * 1024 };
+  if (storage.supportsDirectUpload) {
+    return { mode: "direct", flow: storage.directUploadFlow ?? "client-token", pathname: storageKey, contentType, multipart: size > 8 * 1024 * 1024 };
+  }
   return { mode: "server", contentType };
 }
 
@@ -313,6 +315,32 @@ export async function authorizeDirectUpload(
     // Only a not-yet-completed path can be rewritten (a retry after a failed upload).
     allowOverwrite: true,
     tokenPayload: recording.id,
+  };
+}
+
+/**
+ * OIDC flow: the same authorization as `authorizeDirectUpload`, then a
+ * write-only delegation from Blob for exactly this path, type and size. The
+ * presigned URL built from it carries the same limits.
+ */
+export async function grantPresignedUpload(
+  db: DbClient,
+  userId: string,
+  projectId: string,
+  weaveId: string,
+  pathname: string,
+  clientPayload: string | null,
+) {
+  const grant = await authorizeDirectUpload(db, userId, projectId, weaveId, pathname, clientPayload);
+  const storage = await getStorage();
+  if (storage.directUploadFlow !== "presigned" || !storage.signedUploadToken) {
+    throw new AppError("direct_upload_unavailable", "Direct uploads aren't available on this server.", 409);
+  }
+  const limits = { allowedContentTypes: grant.allowedContentTypes, maximumSizeInBytes: grant.maximumSizeInBytes, validUntil: grant.validUntil };
+  const token = await storage.signedUploadToken(pathname, limits);
+  return {
+    token,
+    urlOptions: { ...limits, addRandomSuffix: grant.addRandomSuffix, allowOverwrite: grant.allowOverwrite, tokenPayload: grant.tokenPayload },
   };
 }
 

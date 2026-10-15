@@ -19,7 +19,7 @@ export type RecordingDto = {
 };
 
 type UploadInstructions =
-  | { mode: "direct"; pathname: string; contentType: string; multipart: boolean }
+  | { mode: "direct"; flow: "client-token" | "presigned"; pathname: string; contentType: string; multipart: boolean }
   | { mode: "server"; contentType: string };
 
 export type UploadPhase = "preparing" | "uploading" | "verifying";
@@ -51,9 +51,11 @@ export async function uploadRecording(opts: {
 
   opts.onPhase("uploading");
   if (reserved.upload.mode === "direct") {
-    const { upload } = await import("@vercel/blob/client");
+    const { upload, uploadPresigned } = await import("@vercel/blob/client");
+    // Same options either way; the server decides the flow from how the store is connected.
+    const send = reserved.upload.flow === "presigned" ? uploadPresigned : upload;
     try {
-      await upload(reserved.upload.pathname, opts.file, {
+      await send(reserved.upload.pathname, opts.file, {
         access: "private",
         handleUploadUrl: `${base}/uploads`,
         clientPayload: JSON.stringify({ recordingId }),

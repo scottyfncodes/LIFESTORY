@@ -1,3 +1,4 @@
+import type { IssuedSignedToken } from "@vercel/blob";
 import { storageProviderName } from "../config";
 import { ConfigurationError } from "../errors";
 
@@ -18,6 +19,13 @@ export interface StorageProvider {
   readRange?(key: string, start: number, endInclusive: number): Promise<Uint8Array | null>;
   /** A short-lived, object-scoped, read-only URL. Never a public URL. */
   signedReadUrl?(key: string, ttlSeconds: number): Promise<string>;
+  /**
+   * How browsers get permission for a direct upload: a client token signed
+   * with the read-write token, or a presigned URL (works with OIDC).
+   */
+  readonly directUploadFlow?: "client-token" | "presigned";
+  /** Delegation for one presigned upload, scoped to exactly this key and these limits. */
+  signedUploadToken?(key: string, limits: { allowedContentTypes: string[]; maximumSizeInBytes: number; validUntil: number }): Promise<IssuedSignedToken>;
 }
 
 let cached: StorageProvider | null = null;
@@ -27,7 +35,8 @@ export async function getStorage(): Promise<StorageProvider> {
   const name = storageProviderName();
   if (name === "vercel-blob") {
     const { VercelBlobStorage } = await import("./vercel-blob");
-    cached = new VercelBlobStorage(process.env.BLOB_READ_WRITE_TOKEN as string);
+    // No token means OIDC: the SDK reads VERCEL_OIDC_TOKEN and BLOB_STORE_ID itself.
+    cached = new VercelBlobStorage(process.env.BLOB_READ_WRITE_TOKEN || null);
   } else {
     if (process.env.VERCEL && process.env.STORAGE_PROVIDER !== "local") {
       throw new ConfigurationError("Private media storage is not configured. Recordings can't be uploaded until a Blob store is connected.");

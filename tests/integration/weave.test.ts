@@ -19,6 +19,7 @@ import {
   deleteWeave,
   getRecordingPlayback,
   getWeaveDetail,
+  grantPresignedUpload,
   listWeaves,
   reserveRecording,
   updateRecordingDetails,
@@ -39,6 +40,12 @@ class MemoryStorage implements StorageProvider {
   async stat(key: string) { const o = this.objects.get(key); return o ? { size: o.body.length, contentType: o.contentType } : null; }
   async readRange(key: string, start: number, end: number) { const o = this.objects.get(key); return o ? o.body.slice(start, end + 1) : null; }
   signedReadUrl?: (key: string, ttl: number) => Promise<string>;
+  directUploadFlow?: "client-token" | "presigned";
+  uploadGrants: { key: string; limits: { allowedContentTypes: string[]; maximumSizeInBytes: number; validUntil: number } }[] = [];
+  async signedUploadToken(key: string, limits: { allowedContentTypes: string[]; maximumSizeInBytes: number; validUntil: number }) {
+    this.uploadGrants.push({ key, limits });
+    return { delegationToken: `test-delegation-${key}`, clientSigningToken: "test-signing", validUntil: limits.validUntil };
+  }
 }
 
 const M4A = new Uint8Array([0, 0, 0, 0x20, ...Buffer.from("ftypM4A "), ...new Array(200).fill(7)]);
@@ -71,6 +78,8 @@ beforeEach(() => {
   storage.supportsDirectUpload = false;
   storage.failDeletes = false;
   storage.signedReadUrl = undefined;
+  storage.directUploadFlow = undefined;
+  storage.uploadGrants = [];
 });
 
 afterEach(() => {
@@ -334,6 +343,43 @@ describe("direct uploads (Blob-style storage)", () => {
     await expect(authorizeDirectUpload(db, alice.id, projectId, weave.id, "anything", null)).rejects.toBeInstanceOf(ValidationError);
     const other = await newWeave(projectId);
     await expect(authorizeDirectUpload(db, alice.id, projectId, other.id, "anything", payload)).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  it("OIDC flow: issues a write-only delegation bound to the reserved path, type and size", async () => {
+    storage.supportsDirectUpload = true;
+    storage.directUploadFlow = "presigned";
+    const projectId = await newProject();
+    const weave = await newWeave(projectId);
+    const { recording, upload } = await reserveRecording(db, alice.id, projectId, weave.id, { clientUploadId: uploadId(), filename: "memo.m4a", mimeType: "audio/x-m4a", size: M4A.length });
+    expect(upload).toMatchObject({ mode: "direct", flow: "presigned" });
+    const asset = await assetFor(recording.id);
+    const payload = JSON.stringify({ recordingId: recording.id });
+    const before = Date.now();
+    const grant = await grantPresignedUpload(db, alice.id, projectId, weave.id, asset.storageKey, payload);
+    expect(storage.uploadGrants).toHaveLength(1);
+    expect(storage.uploadGrants[0].key).toBe(asset.storageKey);
+    expect(storage.uploadGrants[0].limits).toMatchObject({ allowedContentTypes: ["audio/x-m4a"], maximumSizeInBytes: M4A.length });
+    expect(grant.urlOptions).toMatchObject({ allowedContentTypes: ["audio/x-m4a"], maximumSizeInBytes: M4A.length, addRandomSuffix: false, allowOverwrite: true, tokenPayload: recording.id });
+    expect(grant.urlOptions.validUntil).toBeGreaterThan(before);
+    expect(grant.urlOptions.validUntil).toBeLessThanOrEqual(Date.now() + 60 * 60 * 1000);
+
+    // Same refusals as the client-token flow; no delegation is issued for them.
+    await expect(grantPresignedUpload(db, alice.id, projectId, weave.id, `projects/${projectId}/recordings/x.m4a`, payload)).rejects.toBeInstanceOf(ForbiddenError);
+    await expect(grantPresignedUpload(db, bob.id, projectId, weave.id, asset.storageKey, payload)).rejects.toBeInstanceOf(NotFoundError);
+    await storage.put(asset.storageKey, M4A, "audio/x-m4a");
+    await completeRecording(db, alice.id, projectId, weave.id, recording.id);
+    await expect(grantPresignedUpload(db, alice.id, projectId, weave.id, asset.storageKey, payload)).rejects.toMatchObject({ code: "already_uploaded" });
+    expect(storage.uploadGrants).toHaveLength(1);
+  });
+
+  it("refuses a presigned grant when storage uses client tokens", async () => {
+    storage.supportsDirectUpload = true;
+    const projectId = await newProject();
+    const weave = await newWeave(projectId);
+    const { recording, upload } = await reserveRecording(db, alice.id, projectId, weave.id, { clientUploadId: uploadId(), filename: "a.m4a", mimeType: "audio/mp4", size: 100 });
+    expect(upload).toMatchObject({ mode: "direct", flow: "client-token" });
+    const asset = await assetFor(recording.id);
+    await expect(grantPresignedUpload(db, alice.id, projectId, weave.id, asset.storageKey, JSON.stringify({ recordingId: recording.id }))).rejects.toMatchObject({ code: "direct_upload_unavailable" });
   });
 
   it("plays back through a short-lived signed link when storage offers one", async () => {

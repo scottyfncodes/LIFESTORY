@@ -21,9 +21,21 @@ export function transcriptionProviderName(): TranscriptionProviderName {
   return "none";
 }
 
+/**
+ * How the app authenticates to Vercel Blob. A store connected to the project
+ * gets either a read-write token or, by default on newer stores, OIDC: the
+ * runtime's short-lived VERCEL_OIDC_TOKEN plus BLOB_STORE_ID. Vercel only
+ * accepts OIDC from the environments the store is connected to.
+ */
+export function blobAuthMode(): "token" | "oidc" | null {
+  if (process.env.BLOB_READ_WRITE_TOKEN) return "token";
+  if (process.env.BLOB_STORE_ID) return "oidc";
+  return null;
+}
+
 export function storageProviderName(): StorageProviderName {
   const v = (process.env.STORAGE_PROVIDER ?? "local").toLowerCase();
-  if (v === "vercel-blob" && process.env.BLOB_READ_WRITE_TOKEN) return "vercel-blob";
+  if (v === "vercel-blob" && blobAuthMode()) return "vercel-blob";
   return "local";
 }
 

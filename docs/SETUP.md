@@ -78,7 +78,9 @@ PW_CHROMIUM_PATH=/path/to/chromium pnpm test:e2e   # Playwright, iPhone + deskto
 
 Conversation Weave stores original recordings, which can be hundreds of megabytes, so browsers upload them **directly to private Vercel Blob storage** with a short-lived token scoped to one file; the bytes never pass through a serverless function.
 
-1. In Vercel → Storage, create a Blob store with **private** access for **Preview** and a **separate** private store for **Production**. Connect each to the `lifestory` project for its environment only. That sets `BLOB_READ_WRITE_TOKEN` per environment.
+1. In Vercel → Storage, create a Blob store with **private** access for **Preview** and a **separate** private store for **Production**. Connect each to the `lifestory` project for its environment only. Either connection style works:
+   - **OIDC (Vercel's default for new stores):** Vercel adds `BLOB_STORE_ID` and `BLOB_WEBHOOK_PUBLIC_KEY`; the runtime's short-lived `VERCEL_OIDC_TOKEN` authenticates, and Vercel refuses OIDC from environments the store isn't connected to. Browser uploads use presigned upload URLs.
+   - **Read-write token:** `BLOB_READ_WRITE_TOKEN`. Browser uploads use client tokens. If both are present the token is used.
 2. In that environment set `STORAGE_PROVIDER=vercel-blob` and `WEAVE_ENABLED=1`, then redeploy. The flag is read at build time for the Content-Security-Policy (it adds `https://vercel.com/api/blob/` to `connect-src` and `https://*.private.blob.vercel-storage.com` to `media-src`) and at request time for pages and APIs.
 3. Migration `0003_weave_recordings` must be applied (`pnpm db:migrate`). It only adds tables, enum types and three defaulted columns on `media_assets`.
 4. Check: create a conversation, upload an M4A from an iPhone, play it and seek, then delete the conversation and confirm the object is gone from the Blob store browser.
