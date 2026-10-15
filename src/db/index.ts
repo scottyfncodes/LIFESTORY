@@ -13,15 +13,43 @@ declare global {
   var __lifestoryDb: { db: Database; kind: DriverKind; close: () => Promise<void> } | undefined;
 }
 
-export function resolveDriverKind(): DriverKind {
-  const explicit = process.env.DATABASE_DRIVER;
-  if (explicit === "pglite" || explicit === "neon") return explicit;
-  if (process.env.DATABASE_URL) return "neon";
+export class DatabaseConfigError extends Error {
+  constructor(message: string) {
+    super(`${message} See docs/SETUP.md.`);
+    this.name = "DatabaseConfigError";
+  }
+}
+
+/**
+ * Picks the database driver. PGlite is an in-process database whose data is
+ * lost when the instance goes away, so it is only used when chosen
+ * explicitly or in local development. A deployment without DATABASE_URL
+ * fails loudly instead of silently running on throwaway storage.
+ */
+export function resolveDriverKind(env: NodeJS.ProcessEnv = process.env): DriverKind {
+  const explicit = env.DATABASE_DRIVER;
+  if (explicit === "neon") return "neon";
+  if (explicit === "pglite") {
+    if (env.VERCEL) {
+      throw new DatabaseConfigError("DATABASE_DRIVER=pglite is not supported on Vercel; set DATABASE_URL.");
+    }
+    return "pglite";
+  }
+  if (env.DATABASE_URL) return "neon";
+  if (env.VERCEL || env.NODE_ENV === "production") {
+    throw new DatabaseConfigError(
+      "DATABASE_URL is not configured. Refusing to fall back to temporary in-memory storage in production.",
+    );
+  }
   return "pglite";
 }
 
 export function isDatabaseConfigured(): boolean {
-  return resolveDriverKind() === "pglite" || Boolean(process.env.DATABASE_URL);
+  try {
+    return resolveDriverKind() === "pglite" || Boolean(process.env.DATABASE_URL);
+  } catch {
+    return false;
+  }
 }
 
 async function createNeon(): Promise<{ db: Database; close: () => Promise<void> }> {
@@ -61,11 +89,12 @@ let initPromise: Promise<Database> | null = null;
 export function getDb(): Promise<Database> {
   if (globalThis.__lifestoryDb) return Promise.resolve(globalThis.__lifestoryDb.db);
   if (!initPromise) {
-    const kind = resolveDriverKind();
-    initPromise = (kind === "neon" ? createNeon() : createPglite()).then((handle) => {
+    initPromise = (async () => {
+      const kind = resolveDriverKind();
+      const handle = kind === "neon" ? await createNeon() : await createPglite();
       globalThis.__lifestoryDb = { ...handle, kind };
       return handle.db;
-    });
+    })();
     initPromise.catch(() => {
       initPromise = null;
     });
