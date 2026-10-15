@@ -100,7 +100,7 @@ export class FixtureTranscription implements TranscriptionProvider {
     // Tests may embed "FIXTURE:<text>" after the container header to drive the transcript.
     const head = Buffer.from(input.bytes.subarray(0, 160)).toString("latin1");
     const at = head.indexOf("FIXTURE:");
-    const text = at >= 0 ? head.slice(at + 8).replace(/\0+.*$/s, "").trim() : "This is a fixture transcript of the recording.";
+    const text = at >= 0 ? head.slice(at + 8).replace(/\0[\s\S]*$/, "").trim() : "This is a fixture transcript of the recording.";
     return { text, durationSeconds: Math.max(1, Math.round(input.bytes.length / 4000)), provider: "fixture" };
   }
 }
