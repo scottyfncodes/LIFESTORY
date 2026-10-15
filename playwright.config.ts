@@ -41,6 +41,7 @@ export default defineConfig({
           STORAGE_PROVIDER: "local",
           STORAGE_LOCAL_DIR: ".storage-e2e",
           RATE_LIMITS_DISABLED: "1",
+          MAX_UPLOAD_MB: "1",
         },
       },
 });

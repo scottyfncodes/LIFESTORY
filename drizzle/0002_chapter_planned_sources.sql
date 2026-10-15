@@ -1,0 +1,1 @@
+ALTER TABLE "manuscript_chapters" ADD COLUMN "planned_source_turn_ids" jsonb DEFAULT '[]'::jsonb NOT NULL;
