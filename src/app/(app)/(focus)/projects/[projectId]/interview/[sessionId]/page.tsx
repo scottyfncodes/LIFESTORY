@@ -5,7 +5,8 @@ import { InterviewWorkspace } from "@/components/interview/workspace";
 import type { WorkspaceTurn } from "@/components/interview/types";
 import { isAiEnabled, isTranscriptionEnabled, limits } from "@/server/config";
 import { NotFoundError } from "@/server/errors";
-import { getSessionTranscript } from "@/server/interviews";
+import { ensureCurrentQuestion, getSessionTranscript } from "@/server/interviews";
+import { errorCode, log } from "@/server/logger";
 import { isStorageAvailable } from "@/server/storage";
 import { requireUser } from "@/server/session";
 
@@ -30,8 +31,19 @@ export default async function InterviewSessionPage({
     if (error instanceof NotFoundError) notFound();
     throw error;
   }
+  const canWrite = data.access.permissions.has("interview:write");
+  const lastTurn = data.turns[data.turns.length - 1];
+  const open = data.session.sessionStatus === "active" || data.session.sessionStatus === "paused";
+  if (canWrite && open && lastTurn && lastTurn.speakerType !== "interviewer") {
+    // A previous request saved an answer but never asked the next question.
+    try {
+      await ensureCurrentQuestion(db, user.id, projectId, sessionId);
+      data = await getSessionTranscript(db, user.id, projectId, sessionId);
+    } catch (error) {
+      log.warn("interview.heal_question_failed", { sessionId, code: errorCode(error) });
+    }
+  }
   const { access, session, turns } = data;
-  const canWrite = access.permissions.has("interview:write");
   const workspaceTurns: WorkspaceTurn[] = turns.map((t) => ({
     id: t.id,
     sequenceNumber: t.sequenceNumber,

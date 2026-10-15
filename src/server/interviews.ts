@@ -117,6 +117,31 @@ async function appendQuestion(db: DbClient, session: Session, plan: PlannedQuest
 }
 
 /**
+ * Guarantees the session ends with an interviewer question. If a previous
+ * request saved an answer but died before asking the next question (timeout,
+ * crash, provider failure), this asks it now. Idempotent: returns the
+ * existing question when there already is one.
+ */
+async function ensureQuestionAfterLatest(db: DbClient, project: ProjectAccess["project"], session: Session, userId: string): Promise<Turn | null> {
+  const last = await db.query.interviewTurns.findFirst({
+    where: eq(interviewTurns.sessionId, session.id),
+    orderBy: desc(interviewTurns.sequenceNumber),
+  });
+  if (!last) return null;
+  if (last.speakerType === "interviewer") return last;
+  const plan = await planNextQuestion(db, project, session.id, userId);
+  return appendQuestion(db, session, plan);
+}
+
+/** Heals a session left without a current question (called when it is opened). */
+export async function ensureCurrentQuestion(db: DbClient, userId: string, projectId: string, sessionId: string): Promise<Turn | null> {
+  const access = await requireProjectAccess(db, userId, projectId, "interview:write");
+  const session = await requireSession(db, projectId, sessionId);
+  if (session.sessionStatus !== "active" && session.sessionStatus !== "paused") return null;
+  return ensureQuestionAfterLatest(db, access.project, session, userId);
+}
+
+/**
  * Returns the session the narrator should continue, creating one (with its
  * opening question) if none is open.
  */
@@ -278,7 +303,8 @@ export async function submitAnswer(
       where: and(eq(interviewTurns.sessionId, sessionId), eq(interviewTurns.speakerType, "interviewer"), sql`${interviewTurns.sequenceNumber} > ${answer.sequenceNumber}`),
       orderBy: asc(interviewTurns.sequenceNumber),
     });
-    return { answer, nextQuestion: next ?? null, duplicate: true };
+    // A retry of an answer whose follow-up question was never written asks it now.
+    return { answer, nextQuestion: next ?? (await ensureQuestionAfterLatest(db, access.project, session, userId)), duplicate: true };
   }
 
   if (asset) {
@@ -319,7 +345,7 @@ export async function skipQuestion(
     clientTurnId,
     metadata: { skipped: true, coverageArea: meta.coverageArea ?? null, threadId: meta.threadId ?? null, processingStatus: "skipped" },
   });
-  if (!created) return { answer: turn, nextQuestion: null, duplicate: true };
+  if (!created) return { answer: turn, nextQuestion: await ensureQuestionAfterLatest(db, access.project, session, userId), duplicate: true };
   if (meta.threadId) {
     await db.update(storyThreads).set({ status: "deferred" }).where(eq(storyThreads.id, meta.threadId));
   }
