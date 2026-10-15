@@ -222,10 +222,16 @@ export async function planNextQuestion(
   const provider = getAiProvider();
   if (provider) {
     try {
-      const { data } = await withAiTelemetry(
-        db,
-        { projectId: project.id, userId, operation: "generate_question", provider: provider.name },
-        () => provider.generateQuestion(ctx),
+      // The narrator is waiting on this response: cap the AI call well below the
+      // route's duration (SDK retries included) and fall back to the planner.
+      const timeoutMs = Number(process.env.AI_QUESTION_TIMEOUT_MS) || 20_000;
+      const { data } = await withDeadline(
+        withAiTelemetry(
+          db,
+          { projectId: project.id, userId, operation: "generate_question", provider: provider.name },
+          () => provider.generateQuestion(ctx),
+        ),
+        timeoutMs,
       );
       const asked = new Set(ctx.askedQuestions.map(normalizeQuestion));
       const ok =
@@ -248,4 +254,13 @@ export async function planNextQuestion(
     }
   }
   return templateQuestion(ctx);
+}
+
+function withDeadline<T>(promise: Promise<T>, ms: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error("question_timeout")), ms);
+  });
+  promise.catch(() => undefined); // a late failure after the deadline is already handled
+  return Promise.race([promise, deadline]).finally(() => clearTimeout(timer));
 }
