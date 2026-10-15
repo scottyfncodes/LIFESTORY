@@ -53,15 +53,15 @@ existing code to preserve. The stack below was chosen from the specification.
 - Acceptance: a relevant follow-up is asked using earlier answers, without
   repetition or invented facts (tested with fixture provider).
 
-### Milestone 4: Manuscript `[ ]`
+### Milestone 4: Manuscript `[x]`
 - Chapters, immutable revisions, source-grounded drafts, user edits preserved,
   flags, PDF + DOCX export, preview, restore.
 - Acceptance: saved answers become a coherent editable manuscript with
   traceable sources (tested).
 
-### Milestone 5: Security and reliability `[ ]`
+### Milestone 5: Security and reliability `[x]`
 - Authorization coverage, upload hardening, rate limits, bounded retries,
   deletion/export, diagnostics without content logging.
 
-### Milestone 6: Release and polish `[ ]`
+### Milestone 6: Release and polish `[x]` (real-device QA outstanding)
 - Responsive refinement, states, full test run, deployment, QA report, docs.

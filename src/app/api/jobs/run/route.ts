@@ -2,6 +2,7 @@ import { getDb } from "@/db";
 import { ensureJobHandlers } from "@/server/jobs/handlers";
 import { runQueuedJobs } from "@/server/jobs";
 import { errorResponse } from "@/server/errors";
+import { expireRetainedAudio } from "@/server/deletion";
 
 /**
  * Cron-driven drain (see vercel.json). Authenticated with CRON_SECRET so it
@@ -17,7 +18,8 @@ export async function GET(request: Request) {
     ensureJobHandlers();
     const db = await getDb();
     const ran = await runQueuedJobs(db, { limit: 20 });
-    return Response.json({ ran });
+    const expired = await expireRetainedAudio(db);
+    return Response.json({ ran, expired });
   } catch (error) {
     return errorResponse(error);
   }

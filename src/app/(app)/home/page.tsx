@@ -7,6 +7,7 @@ import { Card, CardBody } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { Badge } from "@/components/ui/badge";
+import { Notice } from "@/components/ui/notice";
 import { requireUser } from "@/server/session";
 import { listProjectsForUser } from "@/server/projects";
 import { relativeTime } from "@/lib/utils/dates";
@@ -15,7 +16,8 @@ import { INTENDED_SCOPES } from "@/lib/validation/project";
 export const metadata: Metadata = { title: "Home" };
 export const dynamic = "force-dynamic";
 
-export default async function HomePage() {
+export default async function HomePage({ searchParams }: { searchParams: Promise<{ deleted?: string }> }) {
+  const { deleted } = await searchParams;
   const user = await requireUser("/home");
   const db = await getDb();
   const projects = await listProjectsForUser(db, user.id);
@@ -40,6 +42,8 @@ export default async function HomePage() {
           ) : null
         }
       />
+
+      {deleted === "1" ? <Notice className="mt-6" tone="success">The memoir has been deleted. Its recordings are being removed from storage now.</Notice> : null}
 
       {mostRecent ? (
         <Card className="mt-8 border-clay/20 bg-white">

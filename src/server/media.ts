@@ -1,6 +1,8 @@
 import { and, eq } from "drizzle-orm";
 import type { DbClient } from "@/db";
-import { interviewSessions, mediaAssets } from "@/db/schema";
+import { consentRecords, interviewSessions, mediaAssets } from "@/db/schema";
+import { bytesMatchAudioType } from "./upload-sniff";
+import { POLICY_VERSION } from "./projects";
 import { recordAudit } from "./audit";
 import { requireProjectAccess } from "./authz";
 import { limits } from "./config";
@@ -54,6 +56,10 @@ export async function storeRecording(
   if (file.durationSeconds !== null && file.durationSeconds > maxRecordingSeconds + 5) {
     throw new ValidationError("That recording is longer than the allowed limit.");
   }
+  if (process.env.UPLOAD_SNIFF_DISABLED !== "1" && !bytesMatchAudioType(file.bytes, type.base)) {
+    throw new ValidationError("That file doesn't look like a recording we can accept.");
+  }
+  await recordRecordingConsent(db, projectId, userId);
 
   const retainDays = access.project.privacySettings.retainAudioDays;
   const retainUntil = retainDays ? new Date(Date.now() + retainDays * 86_400_000) : null;
@@ -96,6 +102,14 @@ export async function storeRecording(
   const outcome = await transcribeAsset(db, asset, file.bytes, type.base);
   asset = outcome.asset;
   return { asset, transcript: outcome.transcript, transcriptionError: outcome.error, transcriptionAvailable: true };
+}
+
+/** First recording in a project records the narrator's recording consent once. */
+async function recordRecordingConsent(db: DbClient, projectId: string, userId: string): Promise<void> {
+  const existing = await db.query.consentRecords.findFirst({ where: and(eq(consentRecords.projectId, projectId), eq(consentRecords.subjectUserId, userId), eq(consentRecords.consentType, "audio_recording")) });
+  if (!existing) {
+    await db.insert(consentRecords).values({ projectId, subjectUserId: userId, consentType: "audio_recording", consentStatus: "granted", policyVersion: POLICY_VERSION });
+  }
 }
 
 export async function transcribeAsset(

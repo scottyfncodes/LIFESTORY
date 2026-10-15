@@ -436,6 +436,7 @@ export const manuscriptChapters = pgTable(
     chapterStatus: chapterStatusEnum("chapter_status").notNull().default("planned"),
     currentRevisionId: uuid("current_revision_id"),
     focus: text("focus"),
+    plannedSourceTurnIds: jsonb("planned_source_turn_ids").$type<string[]>().notNull().default([]),
     needsUpdate: boolean("needs_update").notNull().default(false),
     needsUpdateReason: text("needs_update_reason"),
     ...timestamps,
