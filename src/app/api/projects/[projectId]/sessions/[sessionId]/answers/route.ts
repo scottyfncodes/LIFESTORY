@@ -4,6 +4,10 @@ import { enforceRateLimit } from "@/server/rate-limit";
 import { MAX_ANSWER_LENGTH, submitAnswer } from "@/server/interviews";
 import { drainJobsAfterResponse } from "@/server/jobs/drain";
 
+// Explicit so the response, the bounded AI question call and the after()
+// memory extraction share a known budget instead of the platform default.
+export const maxDuration = 300;
+
 const bodySchema = z.object({
   text: z.string().max(MAX_ANSWER_LENGTH),
   inputMode: z.enum(["text", "voice"]),

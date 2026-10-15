@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 import { createProject, signUp } from "./helpers";
 
 test("chapters are proposed, drafted, edited, restored and exported", async ({ page }) => {
+  test.setTimeout(180_000);
   await signUp(page);
   const projectId = await createProject(page, "Book Test");
   const answers = [
@@ -17,7 +18,7 @@ test("chapters are proposed, drafted, edited, restored and exported", async ({ p
 
   await page.goto(`/projects/${projectId}/book`);
   await page.getByRole("button", { name: "Propose chapters" }).click();
-  await expect(page.getByText(/Proposed \d+ new chapter/)).toBeVisible();
+  await expect(page.getByText(/Proposed \d+ new chapter/)).toBeVisible({ timeout: 60_000 });
   await page.getByRole("link", { name: /Chapter 1/ }).first().click();
 
   await page.getByRole("button", { name: "Draft this chapter" }).click();

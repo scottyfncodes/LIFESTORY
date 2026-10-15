@@ -97,8 +97,10 @@ export class FixtureTranscription implements TranscriptionProvider {
   readonly name = "fixture";
   async transcribe(input: TranscriptionInput): Promise<TranscriptionOutput> {
     if (input.bytes.length === 0) throw new ProviderError("fixture", "Empty recording.", false);
-    const marker = Buffer.from(input.bytes.subarray(0, 64)).toString("utf8");
-    const text = marker.startsWith("FIXTURE:") ? marker.slice(8).replace(/\0+$/, "").trim() : "This is a fixture transcript of the recording.";
+    // Tests may embed "FIXTURE:<text>" after the container header to drive the transcript.
+    const head = Buffer.from(input.bytes.subarray(0, 160)).toString("latin1");
+    const at = head.indexOf("FIXTURE:");
+    const text = at >= 0 ? head.slice(at + 8).replace(/\0[\s\S]*$/, "").trim() : "This is a fixture transcript of the recording.";
     return { text, durationSeconds: Math.max(1, Math.round(input.bytes.length / 4000)), provider: "fixture" };
   }
 }

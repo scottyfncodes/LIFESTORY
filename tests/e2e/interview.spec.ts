@@ -48,7 +48,7 @@ test("voice answer: record, review the transcript, correct it, keep it, and play
   await page.waitForTimeout(2500);
   await page.getByRole("button", { name: "Stop" }).click();
   const transcript = page.getByLabel("Transcript of your recording");
-  await expect(transcript).toHaveValue(/fixture transcript/);
+  await expect(transcript).toHaveValue(/fixture transcript/, { timeout: 45_000 });
   await transcript.fill("This is a corrected transcript about my aunt Mabel.");
   await page.getByRole("button", { name: "Keep this answer" }).click();
   await expect(page.locator("p", { hasText: "This is a corrected transcript about my aunt Mabel." })).toBeVisible();

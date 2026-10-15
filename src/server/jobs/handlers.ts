@@ -1,6 +1,7 @@
 import { registerJobHandler } from "./index";
 import { processTurn, refreshSummary } from "../memory/pipeline";
 import { runDraft } from "../manuscript/service";
+import { purgeDeletedProject } from "../deletion";
 
 let registered = false;
 
@@ -14,6 +15,7 @@ export function ensureJobHandlers(): void {
     return processTurn(db, turnId);
   });
   registerJobHandler("refresh_summary", async (db, job) => refreshSummary(db, job.projectId));
+  registerJobHandler("delete_project_media", async (db, job) => purgeDeletedProject(db, job.projectId));
   registerJobHandler("draft_chapter", async (db, job) =>
     runDraft(db, job.projectId, String(job.payload.chapterId ?? ""), (job.payload.userId as string | undefined) ?? null, (job.payload.instructions as string | null | undefined) ?? null),
   );
