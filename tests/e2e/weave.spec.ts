@@ -113,3 +113,35 @@ test("conversation weave: create, upload, reject a spoofed file, play, annotate 
   await expect(page.getByText("No conversations yet")).toBeVisible();
   expect((await page.request.get(src!)).status()).toBe(404);
 });
+
+test("conversation weave: a stalled upload stops with Retry, and Retry completes it", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "Timing-based; one viewport is enough.");
+  test.setTimeout(180_000);
+  await signUp(page);
+  const projectId = await createProject(page, "Weave Stall Test");
+  await page.goto(`/projects/${projectId}/weaves/new`);
+  await page.getByLabel("What was this conversation?").fill("Stalled upload");
+  await page.getByLabel("Person 2").fill("June");
+  await page.getByRole("checkbox").check();
+  await page.getByRole("button", { name: "Create conversation" }).click();
+  await expect(page).toHaveURL(/\/weaves\/[0-9a-f-]{36}$/, { timeout: 45_000 });
+
+  // The storage transfer hangs, as on a phone that loses signal mid-upload.
+  let hanging = true;
+  await page.route("**/recordings/*/content", async (route) => {
+    if (hanging) return; // never answered
+    await route.continue();
+  });
+  await page.getByTestId("weave-file-input").setInputFiles([{ name: "stall.wav", mimeType: "audio/wav", buffer: wav(1) }]);
+  const item = page.getByTestId("upload-item").filter({ hasText: "stall.wav" });
+  await expect(item).toContainText("Uploading");
+  await expect(item).toContainText("connection dropped", { timeout: 90_000 });
+
+  hanging = false;
+  await item.getByRole("button", { name: "Retry" }).click();
+  const card = page.getByTestId("recording-card").filter({ hasText: "stall.wav" });
+  await expect(card).toHaveAttribute("data-status", "uploaded", { timeout: 30_000 });
+  const weaveId = page.url().split("/").pop();
+  const detail = await (await page.request.get(`/api/projects/${projectId}/weaves/${weaveId}`)).json();
+  expect(detail.recordings).toHaveLength(1);
+});

@@ -50,31 +50,83 @@ export async function uploadRecording(opts: {
   const recordingId = reserved.recording.id;
 
   opts.onPhase("uploading");
-  if (reserved.upload.mode === "direct") {
-    const { upload, uploadPresigned } = await import("@vercel/blob/client");
-    // Same options either way; the server decides the flow from how the store is connected.
-    const send = reserved.upload.flow === "presigned" ? uploadPresigned : upload;
-    try {
-      await send(reserved.upload.pathname, opts.file, {
-        access: "private",
-        handleUploadUrl: `${base}/uploads`,
-        clientPayload: JSON.stringify({ recordingId }),
-        contentType: reserved.upload.contentType,
-        multipart: reserved.upload.multipart,
-        abortSignal: opts.signal,
-        onUploadProgress: ({ percentage }) => opts.onProgress(percentage / 100),
-      });
-    } catch (error) {
-      if (opts.signal.aborted) throw error;
-      throw new ApiError(0, "upload_failed", "The upload was interrupted. Check your connection and try again.");
+  const transfer = watchTransfer(opts.signal, opts.onProgress);
+  try {
+    if (reserved.upload.mode === "direct") {
+      const { upload, uploadPresigned } = await import("@vercel/blob/client");
+      // Same options either way; the server decides the flow from how the store is connected.
+      const send = reserved.upload.flow === "presigned" ? uploadPresigned : upload;
+      await transfer.run(
+        send(reserved.upload.pathname, opts.file, {
+          access: "private",
+          handleUploadUrl: `${base}/uploads`,
+          clientPayload: JSON.stringify({ recordingId }),
+          contentType: reserved.upload.contentType,
+          multipart: reserved.upload.multipart,
+          abortSignal: transfer.signal,
+          onUploadProgress: ({ percentage }) => transfer.progress(percentage / 100),
+        }),
+      );
+    } else {
+      await transfer.run(putThroughServer(`${base}/recordings/${recordingId}/content`, opts.file, reserved.upload.contentType, transfer.signal, transfer.progress));
     }
-  } else {
-    await putThroughServer(`${base}/recordings/${recordingId}/content`, opts.file, reserved.upload.contentType, opts.signal, opts.onProgress);
+  } catch (error) {
+    if (transfer.stalled) throw new ApiError(0, "upload_stalled", "The connection dropped during the upload. Check your connection and press Retry.");
+    if (opts.signal.aborted || error instanceof ApiError) throw error;
+    throw new ApiError(0, "upload_failed", "The upload was interrupted. Check your connection and try again.");
+  } finally {
+    transfer.dispose();
   }
 
   opts.onPhase("verifying");
   const done = await apiFetch<{ recording: RecordingDto }>(`${base}/recordings/${recordingId}/complete`, { method: "POST", signal: opts.signal });
   return done.recording;
+}
+
+/** No upload progress for this long means the connection is gone. */
+export const UPLOAD_STALL_MS = 60_000;
+
+/**
+ * Wraps one transfer so a dead connection surfaces quickly. The Blob SDK
+ * retries a failed request 10 times with doubling delays (about 17 minutes in
+ * all) without reporting progress; if nothing moves for UPLOAD_STALL_MS the
+ * transfer is aborted and the user gets Retry straight away.
+ */
+function watchTransfer(outer: AbortSignal, onProgress: (fraction: number) => void) {
+  const controller = new AbortController();
+  const relay = () => controller.abort();
+  outer.addEventListener("abort", relay, { once: true });
+  let last = Date.now();
+  let stalled = false;
+  const timer = window.setInterval(() => {
+    if (Date.now() - last > UPLOAD_STALL_MS) {
+      stalled = true;
+      controller.abort();
+    }
+  }, 2000);
+  const aborted = new Promise<never>((_, reject) => {
+    controller.signal.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")), { once: true });
+  });
+  aborted.catch(() => undefined);
+  return {
+    signal: controller.signal,
+    get stalled() {
+      return stalled;
+    },
+    progress: (fraction: number) => {
+      last = Date.now();
+      onProgress(fraction);
+    },
+    // Settles as soon as the transfer is aborted, even while the SDK waits to retry.
+    run<T>(work: Promise<T>): Promise<T> {
+      work.catch(() => undefined);
+      return Promise.race([work, aborted]);
+    },
+    dispose() {
+      window.clearInterval(timer);
+      outer.removeEventListener("abort", relay);
+    },
+  };
 }
 
 function putThroughServer(url: string, file: File, contentType: string, signal: AbortSignal, onProgress: (f: number) => void): Promise<void> {
