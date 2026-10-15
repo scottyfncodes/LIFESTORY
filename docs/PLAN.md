@@ -63,5 +63,5 @@ existing code to preserve. The stack below was chosen from the specification.
 - Authorization coverage, upload hardening, rate limits, bounded retries,
   deletion/export, diagnostics without content logging.
 
-### Milestone 6: Release and polish `[ ]`
+### Milestone 6: Release and polish `[x]` (real-device QA outstanding)
 - Responsive refinement, states, full test run, deployment, QA report, docs.
