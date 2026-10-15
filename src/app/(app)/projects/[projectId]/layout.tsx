@@ -3,6 +3,7 @@ import { getDb } from "@/db";
 import { ProjectNav } from "@/components/app/project-nav";
 import { Badge } from "@/components/ui/badge";
 import { getProjectAccess } from "@/server/authz";
+import { isWeaveEnabled } from "@/server/config";
 import { requireUser } from "@/server/session";
 
 export default async function ProjectLayout({
@@ -31,7 +32,7 @@ export default async function ProjectLayout({
           </div>
           <p className="mt-0.5 text-[0.875rem] text-ink-3">Narrated by {project.narratorName}</p>
           <div className="mt-3">
-            <ProjectNav projectId={project.id} />
+            <ProjectNav projectId={project.id} showWeave={isWeaveEnabled()} />
           </div>
         </div>
       </div>

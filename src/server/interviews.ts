@@ -278,7 +278,7 @@ export async function submitAnswer(
 
   let asset: typeof mediaAssets.$inferSelect | null = null;
   if (input.mediaAssetId) {
-    asset = (await db.query.mediaAssets.findFirst({ where: and(eq(mediaAssets.id, input.mediaAssetId), eq(mediaAssets.projectId, projectId)) })) ?? null;
+    asset = (await db.query.mediaAssets.findFirst({ where: and(eq(mediaAssets.id, input.mediaAssetId), eq(mediaAssets.projectId, projectId), eq(mediaAssets.purpose, "interview_answer")) })) ?? null;
     if (!asset) throw new NotFoundError("We couldn't find that recording.");
   }
 

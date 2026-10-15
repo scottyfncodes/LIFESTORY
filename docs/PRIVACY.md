@@ -9,6 +9,8 @@ This documents what the code does. It is not a legal compliance statement; have 
 | Account (name, email, password hash, sessions) | `users`, `auth_*` | Until account deletion. |
 | Answers (typed / transcribed, original + corrected) | `interview_turns` | Until project deletion. |
 | Recordings | Private object storage (`media_assets.storage_key`) | Per-project setting (default 90 days), or until deleted by the user; transcripts survive audio deletion. |
+| Conversation Weave originals (when enabled) | Private object storage, `media_assets` (`purpose = weave_source`, `retention_exempt = true`), `weave_recordings` | Kept unchanged until the user deletes the recording, the conversation, the project or the account. Never expired by the retention job. |
+| Conversation Weave details | `weaves`, `weave_participants` | Title, notes, participant names; until deletion. |
 | Memory (people, events, facts, threads) | `people`, `life_events`, `memory_facts`, `story_threads` | Until project deletion. |
 | Manuscript revisions | `manuscript_revisions` | Until project deletion. |
 | Audit events | `audit_events` | Ids only; retained after project deletion (no content). |
@@ -25,9 +27,13 @@ This documents what the code does. It is not a legal compliance statement; have 
 
 `consent_records` stores `privacy_acknowledgment` and `ai_processing` at project creation and `audio_recording` on the first upload per user and project, with a policy version.
 
+Conversation Weave: creating a conversation requires the account holder to confirm that everyone on the recordings knew they were being recorded and agreed to the recordings being kept privately. The confirmation time is stored on the weave (`participant_consent_at`) and an `audio_recording` consent record with policy version `weave-participants-v1` is written. This is the account holder's attestation, not a record collected from each participant.
+
 ## Deletion
 
 - **Recording**: deleted from storage immediately; the transcript is kept on the turn.
+- **Conversation Weave recording or conversation**: the original is removed from storage first; if storage refuses, nothing is removed from the database and the user can retry. Deleting a conversation also removes uploads that were started but never completed (their storage key is fixed when the upload is reserved). Project and account deletion remove weave originals the same way as other recordings.
+- **Export**: the project JSON export includes conversations, participant names and recording metadata (file name, type, size, length, date, notes), whether or not the feature is currently enabled. Audio files are referenced by id, not embedded, and storage paths are never exported.
 - **Project**: marked deleted (all access fails closed at once) → job removes every recording from storage → project row is hard-deleted, cascading to every dependent table. The job retries until storage deletion succeeds.
 - **Account**: Better Auth `deleteUser` (password re-entry) → every owned project, including ones already marked deleted, has its recordings removed from storage and its rows deleted synchronously → only then is the user row deleted. If any recording cannot be removed, the account deletion is aborted and can be retried; nothing is orphaned.
 - **Backups**: Neon point-in-time history on the current project is 6 hours; Vercel Blob deletions are immediate at the API and propagate through its CDN within minutes. After those windows nothing remains. The settings page states this next to the delete control.

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BookOpen, Clock, MessageCircle, Settings, Users, Home } from "lucide-react";
+import { AudioLines, BookOpen, Clock, MessageCircle, Settings, Users, Home } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 
 const items = [
@@ -14,14 +14,18 @@ const items = [
   { segment: "settings", label: "Settings", icon: Settings },
 ];
 
-export function ProjectNav({ projectId }: { projectId: string }) {
+/** Conversation Weave appears only when enabled; the six-slot mobile bar is unchanged (reached from Overview there). */
+const weaveItem = { segment: "weaves", label: "Conversations", icon: AudioLines };
+
+export function ProjectNav({ projectId, showWeave = false }: { projectId: string; showWeave?: boolean }) {
   const pathname = usePathname();
   const base = `/projects/${projectId}`;
+  const desktopItems = showWeave ? [...items.slice(0, 4), weaveItem, ...items.slice(4)] : items;
   return (
     <>
       <nav className="hidden sm:block" aria-label="Project sections">
         <ul className="-mb-px flex gap-1 overflow-x-auto">
-          {items.map((item) => {
+          {desktopItems.map((item) => {
             const href = item.segment ? `${base}/${item.segment}` : base;
             const active = item.segment ? pathname.startsWith(href) : pathname === base;
             return (

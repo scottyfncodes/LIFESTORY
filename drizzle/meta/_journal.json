@@ -22,6 +22,13 @@
       "when": 1792049629973,
       "tag": "0002_chapter_planned_sources",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1792093954212,
+      "tag": "0003_weave_recordings",
+      "breakpoints": true
     }
   ]
 }

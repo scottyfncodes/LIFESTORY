@@ -42,6 +42,23 @@ export function limits() {
   };
 }
 
+/** Conversation Weave is off unless WEAVE_ENABLED is explicitly set in this environment. */
+export function isWeaveEnabled(): boolean {
+  return ["1", "true"].includes((process.env.WEAVE_ENABLED ?? "").toLowerCase());
+}
+
+export function weaveLimits() {
+  // Hard ceiling keeps sizes inside a 32-bit integer column.
+  const mb = Math.min(Number(process.env.MAX_WEAVE_UPLOAD_MB) || 500, 2000);
+  return {
+    maxUploadBytes: mb * 1024 * 1024,
+    maxRecordingsPerWeave: Math.min(Number(process.env.MAX_WEAVE_RECORDINGS) || 20, 100),
+    maxParticipants: 6,
+    /** Presigned playback links expire quickly; the page asks for a new one each time. */
+    playbackUrlTtlSeconds: 300,
+  };
+}
+
 export function describeProviders(): { ai: string; transcription: string; storage: string } {
   const ai = aiProviderName();
   const tr = transcriptionProviderName();

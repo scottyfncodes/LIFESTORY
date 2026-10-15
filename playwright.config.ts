@@ -42,6 +42,8 @@ export default defineConfig({
           STORAGE_LOCAL_DIR: ".storage-e2e",
           RATE_LIMITS_DISABLED: "1",
           MAX_UPLOAD_MB: "1",
+          WEAVE_ENABLED: "1",
+          MAX_WEAVE_UPLOAD_MB: "5",
         },
       },
 });

@@ -7,14 +7,18 @@ const nextConfig: NextConfig = {
   serverExternalPackages: ["@electric-sql/pglite", "@neondatabase/serverless", "ws"],
   poweredByHeader: false,
   async headers() {
+    // Conversation Weave uploads straight from the browser to private Vercel Blob
+    // storage and plays recordings from short-lived presigned URLs. Those two
+    // origins are only allowed when the feature is enabled.
+    const weave = ["1", "true"].includes((process.env.WEAVE_ENABLED ?? "").toLowerCase());
     const csp = [
       "default-src 'self'",
       "script-src 'self' 'unsafe-inline'" + (process.env.NODE_ENV === "development" ? " 'unsafe-eval'" : ""),
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob:",
       "font-src 'self' data:",
-      "media-src 'self' blob:",
-      "connect-src 'self'",
+      "media-src 'self' blob:" + (weave ? " https://*.private.blob.vercel-storage.com" : ""),
+      "connect-src 'self'" + (weave ? " https://vercel.com/api/blob/" : ""),
       "frame-ancestors 'none'",
       "form-action 'self'",
       "base-uri 'self'",

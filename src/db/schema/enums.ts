@@ -105,6 +105,24 @@ export const jobStatusEnum = pgEnum("job_status", [
   "failed",
   "cancelled",
 ]);
+export const mediaPurposeEnum = pgEnum("media_purpose", ["interview_answer", "weave_source"]);
+export const weaveStatusEnum = pgEnum("weave_status", [
+  "draft",
+  "transcribing",
+  "reviewing",
+  "analyzing",
+  "weaving",
+  "ready",
+  "failed",
+  "cancelled",
+]);
+export const weaveRecordingStatusEnum = pgEnum("weave_recording_status", [
+  "awaiting_upload",
+  "uploaded",
+  "transcribing",
+  "transcribed",
+  "failed",
+]);
 export const jobTypeEnum = pgEnum("job_type", [
   "transcribe_media",
   "process_turn",

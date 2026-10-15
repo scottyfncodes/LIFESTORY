@@ -10,6 +10,14 @@ export interface StorageProvider {
   put(key: string, body: Uint8Array, contentType: string): Promise<void>;
   get(key: string): Promise<{ body: ReadableStream<Uint8Array> | Uint8Array; contentType: string; size: number | null } | null>;
   delete(key: string): Promise<void>;
+  /** True when browsers upload straight to private storage (no file bytes pass through our functions). */
+  readonly supportsDirectUpload?: boolean;
+  /** Size and stored type of an object, or null when it does not exist. */
+  stat?(key: string): Promise<{ size: number; contentType: string } | null>;
+  /** Reads bytes `start..endInclusive` (used to verify a file's real format). */
+  readRange?(key: string, start: number, endInclusive: number): Promise<Uint8Array | null>;
+  /** A short-lived, object-scoped, read-only URL. Never a public URL. */
+  signedReadUrl?(key: string, ttlSeconds: number): Promise<string>;
 }
 
 let cached: StorageProvider | null = null;
@@ -43,4 +51,8 @@ export function __setStorageForTests(provider: StorageProvider | null): void {
 
 export function buildMediaKey(projectId: string, assetId: string, extension: string): string {
   return `projects/${projectId}/recordings/${assetId}.${extension}`;
+}
+
+export function buildWeaveMediaKey(projectId: string, weaveId: string, assetId: string, extension: string): string {
+  return `projects/${projectId}/weaves/${weaveId}/${assetId}.${extension}`;
 }

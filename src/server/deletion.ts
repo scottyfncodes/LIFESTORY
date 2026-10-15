@@ -58,7 +58,8 @@ export async function expireRetainedAudio(db: DbClient, limit = 50): Promise<num
   const due = await db
     .select()
     .from(mediaAssets)
-    .where(and(isNull(mediaAssets.deletedAt), eq(mediaAssets.retentionStatus, "retained")))
+    // Retention-exempt originals (Conversation Weave sources) are only ever removed by the user.
+    .where(and(isNull(mediaAssets.deletedAt), eq(mediaAssets.retentionStatus, "retained"), eq(mediaAssets.retentionExempt, false)))
     .limit(500);
   const now = Date.now();
   const expired = due.filter((a) => a.retainUntil && a.retainUntil.getTime() < now).slice(0, limit);
