@@ -6,6 +6,9 @@ import { Notice } from "@/components/ui/notice";
 import { getProjectAccess } from "@/server/authz";
 import { requireUser } from "@/server/session";
 import { describeProviders } from "@/server/config";
+import { DangerZone } from "@/components/app/danger-zone";
+import { and, eq, isNull, sql } from "drizzle-orm";
+import { mediaAssets } from "@/db/schema";
 
 export const metadata: Metadata = { title: "Settings" };
 export const dynamic = "force-dynamic";
@@ -19,6 +22,7 @@ export default async function SettingsPage({ params }: { params: Promise<{ proje
   const canManage = access.permissions.has("project:manage");
   const providers = describeProviders();
   const { project } = access;
+  const [{ count: recordingCount }] = await db.select({ count: sql<number>`count(*)` }).from(mediaAssets).where(and(eq(mediaAssets.projectId, projectId), isNull(mediaAssets.deletedAt)));
 
   return (
     <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-6 sm:py-8" style={{ paddingBottom: "calc(2rem + var(--safe-bottom))" }}>
@@ -53,6 +57,8 @@ export default async function SettingsPage({ params }: { params: Promise<{ proje
           <Row label="Model training" value="Never. Your memoir is not used to train models." />
         </dl>
       </section>
+
+      <DangerZone projectId={project.id} title={project.title} canDelete={access.permissions.has("project:delete")} canExport={access.permissions.has("export")} recordingCount={Number(recordingCount)} />
     </div>
   );
 }

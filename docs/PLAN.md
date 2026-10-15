@@ -59,7 +59,7 @@ existing code to preserve. The stack below was chosen from the specification.
 - Acceptance: saved answers become a coherent editable manuscript with
   traceable sources (tested).
 
-### Milestone 5: Security and reliability `[ ]`
+### Milestone 5: Security and reliability `[x]`
 - Authorization coverage, upload hardening, rate limits, bounded retries,
   deletion/export, diagnostics without content logging.
 

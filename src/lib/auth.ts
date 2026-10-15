@@ -41,6 +41,15 @@ function buildAuth(db: Database) {
       minPasswordLength: 10,
       maxPasswordLength: 128,
     },
+    user: {
+      deleteUser: {
+        enabled: true,
+        beforeDelete: async (user) => {
+          const { deleteAllOwnedProjects } = await import("@/server/deletion");
+          await deleteAllOwnedProjects(db, user.id);
+        },
+      },
+    },
     session: {
       expiresIn: 60 * 60 * 24 * 30,
       updateAge: 60 * 60 * 24,

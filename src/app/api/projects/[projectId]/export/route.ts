@@ -6,6 +6,7 @@ import { buildBookModel, safeFilename } from "@/server/export/manuscript";
 import { renderBookDocx } from "@/server/export/docx";
 import { renderBookPdf } from "@/server/export/pdf";
 import { getManuscript } from "@/server/manuscript/service";
+import { exportProjectData } from "@/server/export/project-data";
 import { recordAudit } from "@/server/audit";
 import { log } from "@/server/logger";
 
@@ -15,7 +16,14 @@ export const GET = apiHandler<{ projectId: string }>(async ({ db, user, request 
   await requireProjectAccess(db, user.id, projectId, "export");
   await enforceRateLimit(db, "export", user.id);
   const format = new URL(request.url).searchParams.get("format");
-  if (format !== "pdf" && format !== "docx") throw new ValidationError("Choose PDF or Word format.");
+  if (format === "json") {
+    const data = await exportProjectData(db, user.id, projectId);
+    await recordAudit(db, { projectId, actorUserId: user.id, actionType: "export.json", targetType: "memoir_project", targetId: projectId });
+    return new Response(JSON.stringify(data, null, 2), {
+      headers: { "content-type": "application/json", "content-disposition": `attachment; filename="${safeFilename(data.project.title, "json")}"`, "cache-control": "private, no-store" },
+    });
+  }
+  if (format !== "pdf" && format !== "docx") throw new ValidationError("Choose PDF, Word or JSON format.");
   const { project, chapters } = await getManuscript(db, projectId);
   const book = buildBookModel({ title: project.title, narratorName: project.narratorName, chapters: chapters.map((c) => ({ title: c.title, subtitle: c.subtitle, body: c.body, flags: c.flags })) });
   if (book.chapters.length === 0) throw new AppError("empty_manuscript", "There are no drafted chapters to export yet.", 409);

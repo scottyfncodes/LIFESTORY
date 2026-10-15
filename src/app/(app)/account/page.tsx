@@ -2,11 +2,16 @@ import type { Metadata } from "next";
 import { SignOutButton } from "@/components/app/sign-out-button";
 import { requireUser } from "@/server/session";
 import { formatDate } from "@/lib/utils/dates";
+import { DeleteAccount } from "@/components/app/delete-account";
+import { getDb } from "@/db";
+import { listProjectsForUser } from "@/server/projects";
 
 export const metadata: Metadata = { title: "Account" };
 
 export default async function AccountPage() {
   const user = await requireUser("/account");
+  const db = await getDb();
+  const owned = (await listProjectsForUser(db, user.id)).filter((p) => p.role === "owner");
   return (
     <div className="mx-auto w-full max-w-2xl px-4 py-8 sm:px-6 sm:py-12" style={{ paddingBottom: "calc(3rem + var(--safe-bottom))" }}>
       <h1 className="font-serif text-[1.9rem] leading-tight text-ink">Your account</h1>
@@ -22,6 +27,7 @@ export default async function AccountPage() {
       <p className="mt-6 text-[0.9rem] leading-relaxed text-ink-3">
         To export or delete a memoir, open its settings. Each project is exported and deleted individually so nothing happens by accident.
       </p>
+      <DeleteAccount projectCount={owned.length} />
     </div>
   );
 }
