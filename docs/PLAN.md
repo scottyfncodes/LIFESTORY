@@ -46,7 +46,7 @@ existing code to preserve. The stack below was chosen from the specification.
   truthful fallbacks.
 - Acceptance: complete and resume a session without losing saved answers (tested).
 
-### Milestone 3: Biographical memory `[ ]`
+### Milestone 3: Biographical memory `[x]`
 - Facts, people, relationships, events, story threads; structured extraction +
   reconciliation; coverage-aware planner; timeline and people views;
   confirmation workflows.

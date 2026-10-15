@@ -238,6 +238,8 @@ export const people = pgTable(
     datePrecision: datePrecisionEnum("date_precision").notNull().default("unknown"),
     isNarrator: boolean("is_narrator").notNull().default(false),
     status: recordStatusEnum("status").notNull().default("confirmed"),
+    userVerified: boolean("user_verified").notNull().default(false),
+    notes: text("notes"),
     mergedIntoPersonId: uuid("merged_into_person_id"),
     sourceTurnId: uuid("source_turn_id").references(() => interviewTurns.id, {
       onDelete: "set null",
@@ -299,6 +301,7 @@ export const lifeEvents = pgTable(
     location: text("location"),
     confidence: confidenceEnum("confidence").notNull().default("medium"),
     status: recordStatusEnum("status").notNull().default("confirmed"),
+    userVerified: boolean("user_verified").notNull().default(false),
     sortKey: integer("sort_key"),
     userNote: text("user_note"),
     mergedIntoEventId: uuid("merged_into_event_id"),

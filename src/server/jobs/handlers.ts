@@ -1,5 +1,5 @@
 import { registerJobHandler } from "./index";
-import { processTurn } from "../memory/pipeline";
+import { processTurn, refreshSummary } from "../memory/pipeline";
 
 let registered = false;
 
@@ -12,4 +12,5 @@ export function ensureJobHandlers(): void {
     if (!turnId) return { skipped: "no_turn" };
     return processTurn(db, turnId);
   });
+  registerJobHandler("refresh_summary", async (db, job) => refreshSummary(db, job.projectId));
 }
