@@ -1,0 +1,39 @@
+import type { Metadata } from "next";
+
+export const metadata: Metadata = { title: "Privacy and your data" };
+
+export default function PrivacyPage() {
+  return (
+    <article className="mx-auto w-full max-w-3xl px-4 py-12 sm:px-6 sm:py-16">
+      <p className="text-[0.8rem] font-medium uppercase tracking-[0.12em] text-ink-3">Privacy and your data</p>
+      <h1 className="mt-2 font-serif text-[2.2rem] leading-tight text-ink">How LifeStory handles your story</h1>
+      <div className="mt-6 space-y-8 text-[1rem] leading-relaxed text-ink-2">
+        <section>
+          <h2 className="font-serif text-[1.4rem] text-ink">What is stored</h2>
+          <p className="mt-2">Your answers (typed or transcribed), any audio recordings you choose to keep, the people, places and events we note from your answers, and every draft and edit of your book. Each is stored in a private project that only you and people you explicitly add can open.</p>
+        </section>
+        <section>
+          <h2 className="font-serif text-[1.4rem] text-ink">Which services process your content</h2>
+          <p className="mt-2">Interview questions, memory notes and chapter drafts are produced by a configured AI provider; audio is transcribed by a configured transcription provider. The exact providers in use are listed in each project&rsquo;s settings. When voice services are not configured, recording uses your browser&rsquo;s own speech recognition, which may send audio to your browser vendor; the app tells you before that happens.</p>
+          <p className="mt-2">LifeStory does not use your memoir to train models, does not show advertising, and does not make private projects discoverable or indexable.</p>
+        </section>
+        <section>
+          <h2 className="font-serif text-[1.4rem] text-ink">Recordings</h2>
+          <p className="mt-2">Audio is kept so you can re-check a transcript. By default a project keeps audio for 90 days after it was recorded, then deletes it while keeping the confirmed transcript. You can change this per project or delete any recording immediately.</p>
+        </section>
+        <section>
+          <h2 className="font-serif text-[1.4rem] text-ink">Export and deletion</h2>
+          <p className="mt-2">You can export a complete project (manuscript, answers and notes) at any time. Deleting a project removes its records and recordings from the live system immediately. Database point-in-time history and storage backups may retain copies for a limited period before they expire; the current retention window is described in project settings next to the delete control.</p>
+        </section>
+        <section>
+          <h2 className="font-serif text-[1.4rem] text-ink">Mistakes and review</h2>
+          <p className="mt-2">AI-generated passages can be wrong. Every passage links to the answers it was drafted from, and anything uncertain is flagged for you rather than smoothed over. Please read your book before you share it.</p>
+        </section>
+        <section>
+          <h2 className="font-serif text-[1.4rem] text-ink">Encryption</h2>
+          <p className="mt-2">Data is encrypted in transit and at rest by our hosting and storage providers. LifeStory does not currently offer end-to-end encryption.</p>
+        </section>
+      </div>
+    </article>
+  );
+}
