@@ -8,6 +8,8 @@ import { Card, CardBody } from "@/components/ui/card";
 import { getProjectAccess } from "@/server/authz";
 import { requireUser } from "@/server/session";
 import { getProjectOverview } from "@/server/overview";
+import { countReviewItems } from "@/server/memory/service";
+import { Notice } from "@/components/ui/notice";
 import { relativeTime } from "@/lib/utils/dates";
 import { INTENDED_SCOPES } from "@/lib/validation/project";
 
@@ -21,6 +23,7 @@ export default async function ProjectOverviewPage({ params }: { params: Promise<
   const access = await getProjectAccess(db, user.id, projectId);
   if (!access) notFound();
   const overview = await getProjectOverview(db, projectId);
+  const reviewCount = access.permissions.has("memory:write") ? await countReviewItems(db, projectId) : 0;
   const { project } = access;
   const scope = INTENDED_SCOPES.find((s) => s.value === project.intendedScope)?.label ?? project.intendedScope;
 
@@ -45,6 +48,12 @@ export default async function ProjectOverviewPage({ params }: { params: Promise<
           </ButtonLink>
         </CardBody>
       </Card>
+
+      {reviewCount > 0 ? (
+        <Notice className="mt-4" tone="warning" title={`${reviewCount} detail${reviewCount === 1 ? "" : "s"} to confirm`}>
+          The note-taker wasn&rsquo;t sure about a few things. <Link href={`/projects/${project.id}/review`} className="font-medium text-clay hover:text-clay-2">Take a look</Link> when you have a moment.
+        </Notice>
+      ) : null}
 
       <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Tile href={`/projects/${project.id}/interview`} icon={MessageCircle} title="Interview" text={overview.sessionCount === 0 ? "No sessions yet" : `${overview.sessionCount} session${overview.sessionCount === 1 ? "" : "s"}`} />

@@ -1,20 +1,36 @@
-import { notFound } from "next/navigation";
+import { redirect } from "next/navigation";
 import { getDb } from "@/db";
-import { getProjectAccess } from "@/server/authz";
 import { requireUser } from "@/server/session";
+import { startNewSession, startOrResumeSession } from "@/server/interviews";
+import { NotFoundError } from "@/server/errors";
+import { notFound } from "next/navigation";
+import { ensureJobHandlers } from "@/server/jobs/handlers";
 
 export const dynamic = "force-dynamic";
 
-export default async function Page({ params }: { params: Promise<{ projectId: string }> }) {
+/** Entry point: resumes the open conversation or opens a new one. */
+export default async function InterviewEntryPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ projectId: string }>;
+  searchParams: Promise<{ welcome?: string; new?: string }>;
+}) {
   const { projectId } = await params;
-  const user = await requireUser();
+  const { welcome, new: startNew } = await searchParams;
+  const user = await requireUser(`/projects/${projectId}/interview`);
   const db = await getDb();
-  const access = await getProjectAccess(db, user.id, projectId);
-  if (!access) notFound();
-  return (
-    <div className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6">
-      <h1 className="font-serif text-[1.9rem] text-ink">Interview</h1>
-      <p className="mt-2 text-ink-2">This section is being built.</p>
-    </div>
-  );
+  ensureJobHandlers();
+  let sessionId: string;
+  try {
+    if (startNew === "1") {
+      sessionId = (await startNewSession(db, user.id, projectId)).id;
+    } else {
+      sessionId = (await startOrResumeSession(db, user.id, projectId)).session.id;
+    }
+  } catch (error) {
+    if (error instanceof NotFoundError) notFound();
+    throw error;
+  }
+  redirect(`/projects/${projectId}/interview/${sessionId}${welcome ? "?welcome=1" : ""}`);
 }

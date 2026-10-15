@@ -34,34 +34,34 @@ existing code to preserve. The stack below was chosen from the specification.
 
 ## Milestones
 
-### Milestone 1: Foundation `[ ]`
+### Milestone 1: Foundation `[x]`
 - Schema + migrations, auth, project ownership + authorization, landing,
   onboarding, app shell, test infrastructure.
 - Acceptance: sign in, create a private project, reopen it, cannot access
   another user's project (tested).
 
-### Milestone 2: Interview experience `[ ]`
+### Milestone 2: Interview experience `[x]`
 - Sessions, ordered idempotent turns, autosave, voice recording + upload +
   transcription + correction, text/voice switching, pause/resume/skip/finish,
   truthful fallbacks.
 - Acceptance: complete and resume a session without losing saved answers (tested).
 
-### Milestone 3: Biographical memory `[ ]`
+### Milestone 3: Biographical memory `[x]`
 - Facts, people, relationships, events, story threads; structured extraction +
   reconciliation; coverage-aware planner; timeline and people views;
   confirmation workflows.
 - Acceptance: a relevant follow-up is asked using earlier answers, without
   repetition or invented facts (tested with fixture provider).
 
-### Milestone 4: Manuscript `[ ]`
+### Milestone 4: Manuscript `[x]`
 - Chapters, immutable revisions, source-grounded drafts, user edits preserved,
   flags, PDF + DOCX export, preview, restore.
 - Acceptance: saved answers become a coherent editable manuscript with
   traceable sources (tested).
 
-### Milestone 5: Security and reliability `[ ]`
+### Milestone 5: Security and reliability `[x]`
 - Authorization coverage, upload hardening, rate limits, bounded retries,
   deletion/export, diagnostics without content logging.
 
-### Milestone 6: Release and polish `[ ]`
+### Milestone 6: Release and polish `[x]` (real-device QA outstanding)
 - Responsive refinement, states, full test run, deployment, QA report, docs.
