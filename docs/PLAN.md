@@ -34,13 +34,13 @@ existing code to preserve. The stack below was chosen from the specification.
 
 ## Milestones
 
-### Milestone 1: Foundation `[ ]`
+### Milestone 1: Foundation `[x]`
 - Schema + migrations, auth, project ownership + authorization, landing,
   onboarding, app shell, test infrastructure.
 - Acceptance: sign in, create a private project, reopen it, cannot access
   another user's project (tested).
 
-### Milestone 2: Interview experience `[ ]`
+### Milestone 2: Interview experience `[x]`
 - Sessions, ordered idempotent turns, autosave, voice recording + upload +
   transcription + correction, text/voice switching, pause/resume/skip/finish,
   truthful fallbacks.
