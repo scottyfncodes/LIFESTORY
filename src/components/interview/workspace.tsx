@@ -499,17 +499,17 @@ export function InterviewWorkspace({ projectId, session, narratorName, mode, ini
                         )
                       ) : null}
                       {canRecord && canDictate ? (
-                        <button type="button" onClick={() => setMicMode((m) => (m === "record" ? "dictate" : "record"))} className="inline-flex h-9 items-center gap-1 rounded-md px-2 text-[0.8rem] text-ink-3 hover:bg-paper-2 hover:text-ink">
-                          {micMode === "record" ? <><Type className="h-3.5 w-3.5" aria-hidden /> Use dictation</> : <><Play className="h-3.5 w-3.5" aria-hidden /> Use recording</>}
+                        <button type="button" onClick={() => setMicMode((m) => (m === "record" ? "dictate" : "record"))} aria-label={micMode === "record" ? "Use dictation instead" : "Use recording instead"} className="inline-flex h-9 items-center gap-1 rounded-md px-2 text-[0.8rem] text-ink-3 hover:bg-paper-2 hover:text-ink">
+                          {micMode === "record" ? <><Type className="h-3.5 w-3.5" aria-hidden /><span className="hidden sm:inline">Use dictation</span></> : <><Play className="h-3.5 w-3.5" aria-hidden /><span className="hidden sm:inline">Use recording</span></>}
                         </button>
                       ) : null}
                     </div>
                     <div className="flex items-center gap-1">
-                      <Button variant="ghost" size="sm" onClick={handleSkip} disabled={busy !== "idle" || !currentQuestion}>
-                        <SkipForward className="h-4 w-4" aria-hidden /> Skip
+                      <Button variant="ghost" size="sm" onClick={handleSkip} disabled={busy !== "idle" || !currentQuestion} aria-label="Skip">
+                        <SkipForward className="h-4 w-4" aria-hidden /> <span className="hidden sm:inline">Skip</span>
                       </Button>
-                      <Button size="sm" onClick={handleSendText} disabled={!text.trim() || busy !== "idle"} loading={busy === "saving"}>
-                        <Send className="h-4 w-4" aria-hidden /> Save answer
+                      <Button size="sm" onClick={handleSendText} disabled={!text.trim() || busy !== "idle"} loading={busy === "saving"} aria-label="Save answer">
+                        <Send className="h-4 w-4" aria-hidden /> Save<span className="hidden sm:inline"> answer</span>
                       </Button>
                     </div>
                   </div>

@@ -45,8 +45,8 @@ function buildAuth(db: Database) {
       deleteUser: {
         enabled: true,
         beforeDelete: async (user) => {
-          const { deleteAllOwnedProjects } = await import("@/server/deletion");
-          await deleteAllOwnedProjects(db, user.id);
+          const { purgeAllOwnedProjects } = await import("@/server/deletion");
+          await purgeAllOwnedProjects(db, user.id);
         },
       },
     },
