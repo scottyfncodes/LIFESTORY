@@ -24,6 +24,8 @@ export type PlaybackRecovery = {
 };
 
 const MEDIA_ERR_ABORTED = 1;
+// The file itself can't be decoded: a fresh link returns the same bytes.
+const MEDIA_ERR_DECODE = 3;
 
 export function attachPlaybackRecovery(
   media: MediaLike,
@@ -44,6 +46,9 @@ export function attachPlaybackRecovery(
   let linkAt: number | null = null;
   let restore: { time: number; play: boolean } | null = null;
   let failures = 0;
+  // Whether the listener wants it playing. Tracked from events because browsers
+  // can report paused before the error event of a failed mid-play request.
+  let wantsToPlay = false;
 
   const stale = () => staleAfterMs !== null && linkAt !== null && now() - linkAt >= staleAfterMs;
 
@@ -71,7 +76,11 @@ export function attachPlaybackRecovery(
     if (play && media.paused) media.play().catch(() => {});
   };
   const onPlay = () => {
+    wantsToPlay = true;
     if (!restore && stale()) reload(media.currentTime, true);
+  };
+  const onPause = () => {
+    if (!restore) wantsToPlay = false;
   };
   const onSeeking = () => {
     // currentTime is already the seek target here.
@@ -82,17 +91,18 @@ export function attachPlaybackRecovery(
   };
   const onError = () => {
     if (media.error?.code === MEDIA_ERR_ABORTED) return;
-    if (failures >= maxAttempts) {
+    if (failures >= maxAttempts || media.error?.code === MEDIA_ERR_DECODE) {
       onGiveUp?.();
       return;
     }
     failures += 1;
     // A failure while restoring keeps the position being restored.
-    reload(restore?.time ?? media.currentTime, restore?.play ?? !media.paused);
+    reload(restore?.time ?? media.currentTime, restore?.play ?? wantsToPlay);
   };
 
   media.addEventListener("loadedmetadata", onLoadedMetadata);
   media.addEventListener("play", onPlay);
+  media.addEventListener("pause", onPause);
   media.addEventListener("seeking", onSeeking);
   media.addEventListener("playing", onPlaying);
   media.addEventListener("error", onError);
@@ -106,6 +116,7 @@ export function attachPlaybackRecovery(
     detach() {
       media.removeEventListener("loadedmetadata", onLoadedMetadata);
       media.removeEventListener("play", onPlay);
+      media.removeEventListener("pause", onPause);
       media.removeEventListener("seeking", onSeeking);
       media.removeEventListener("playing", onPlaying);
       media.removeEventListener("error", onError);

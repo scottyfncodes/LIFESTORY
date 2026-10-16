@@ -146,6 +146,30 @@ describe("attachPlaybackRecovery", () => {
     expect(media.paused).toBe(false);
   });
 
+  it("keeps playing after a mid-play failure even if the browser already reports paused", () => {
+    // Chromium flips paused (without a pause event) before the error event of a refused request.
+    const { media } = setup();
+    media.play();
+    media.loaded();
+    media.fire("playing");
+    media.currentTime = 560;
+    media.paused = true;
+    media.fail(2);
+    media.loaded();
+    expect(media.currentTime).toBe(560);
+    expect(media.paused).toBe(false);
+  });
+
+  it("doesn't retry a file that can't be decoded", () => {
+    const { media, onGiveUp } = setup();
+    media.play();
+    media.loaded();
+    media.fire("playing");
+    media.fail(3);
+    expect(media.srcHistory).toEqual([URL]);
+    expect(onGiveUp).toHaveBeenCalledTimes(1);
+  });
+
   it("a failure while paused restores the place without starting playback", () => {
     const { media } = setup();
     listenThenPause(media, 75);
