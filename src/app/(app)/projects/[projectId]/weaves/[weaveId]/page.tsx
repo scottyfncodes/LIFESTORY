@@ -32,7 +32,7 @@ export default async function WeavePage({ params }: { params: Promise<{ projectI
     throw error;
   }
   const canWrite = access.permissions.has("interview:write");
-  const { maxUploadBytes, maxRecordingsPerWeave } = weaveLimits();
+  const { maxUploadBytes, maxRecordingsPerWeave, playbackUrlTtlSeconds } = weaveLimits();
   // Dates cross the server/client boundary as strings.
   const recordings = JSON.parse(JSON.stringify(detail.recordings)) as RecordingDto[];
 
@@ -54,7 +54,7 @@ export default async function WeavePage({ params }: { params: Promise<{ projectI
       </Notice>
 
       <div className="mt-6">
-        <RecordingsWorkspace projectId={projectId} weaveId={weaveId} initialRecordings={recordings} canWrite={canWrite} maxUploadBytes={maxUploadBytes} maxRecordings={maxRecordingsPerWeave} />
+        <RecordingsWorkspace projectId={projectId} weaveId={weaveId} initialRecordings={recordings} canWrite={canWrite} maxUploadBytes={maxUploadBytes} maxRecordings={maxRecordingsPerWeave} playbackLinkSeconds={playbackUrlTtlSeconds} />
       </div>
 
       {canWrite ? (

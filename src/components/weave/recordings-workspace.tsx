@@ -34,6 +34,7 @@ export function RecordingsWorkspace({
   canWrite,
   maxUploadBytes,
   maxRecordings,
+  playbackLinkSeconds,
 }: {
   projectId: string;
   weaveId: string;
@@ -41,6 +42,7 @@ export function RecordingsWorkspace({
   canWrite: boolean;
   maxUploadBytes: number;
   maxRecordings: number;
+  playbackLinkSeconds: number | null;
 }) {
   const [recordings, setRecordings] = useState<RecordingDto[]>(initialRecordings);
   const [queue, setQueue] = useState<QueueItem[]>([]);
@@ -216,7 +218,7 @@ export function RecordingsWorkspace({
       {stuck.length > 0 ? (
         <ul className="space-y-2">
           {stuck.map((r) => (
-            <RecordingCard key={r.id} projectId={projectId} weaveId={weaveId} recording={r} canWrite={canWrite} onChange={(next) => setRecordings((list) => list.map((x) => (x.id === next.id ? next : x)))} onRemoved={() => setRecordings((list) => list.filter((x) => x.id !== r.id))} />
+            <RecordingCard key={r.id} projectId={projectId} weaveId={weaveId} recording={r} canWrite={canWrite} playbackLinkSeconds={playbackLinkSeconds} onChange={(next) => setRecordings((list) => list.map((x) => (x.id === next.id ? next : x)))} onRemoved={() => setRecordings((list) => list.filter((x) => x.id !== r.id))} />
           ))}
         </ul>
       ) : null}
@@ -224,7 +226,7 @@ export function RecordingsWorkspace({
       {completed.length > 0 ? (
         <ol className="space-y-3">
           {completed.map((r) => (
-            <RecordingCard key={r.id} projectId={projectId} weaveId={weaveId} recording={r} canWrite={canWrite} onChange={(next) => setRecordings((list) => list.map((x) => (x.id === next.id ? next : x)))} onRemoved={() => setRecordings((list) => list.filter((x) => x.id !== r.id))} />
+            <RecordingCard key={r.id} projectId={projectId} weaveId={weaveId} recording={r} canWrite={canWrite} playbackLinkSeconds={playbackLinkSeconds} onChange={(next) => setRecordings((list) => list.map((x) => (x.id === next.id ? next : x)))} onRemoved={() => setRecordings((list) => list.filter((x) => x.id !== r.id))} />
           ))}
         </ol>
       ) : queue.length === 0 ? (
