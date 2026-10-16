@@ -7,7 +7,7 @@
 3. **Transcription not enabled.** Add `OPENAI_API_KEY` (or `DEEPGRAM_API_KEY`) and the matching `TRANSCRIPTION_PROVIDER`.
 4. **Shared Neon project.** The `lifestory` database lives inside another app's Neon project (see `docs/SETUP.md` §3). Move it to a dedicated database when convenient.
 5. **Real-device testing** has not happened (`docs/QA-IPHONE.md`).
-6. **Conversation Weave needs private Blob stores before it can be enabled anywhere on Vercel.** Create one private store for Preview and a separate one for Production, then set `STORAGE_PROVIDER=vercel-blob` and `WEAVE_ENABLED=1` per environment (`docs/SETUP.md` §7a). Until then it stays off.
+6. **Conversation Weave needs private Blob stores before it can be enabled anywhere on Vercel.** Originals use their own store (`WEAVE_BLOB_*`), separate from interview audio. Create one private Weave store for Preview and a separate one for Production, then set the `WEAVE_BLOB_*` variables and `WEAVE_ENABLED=1` per environment (`docs/SETUP.md` §7a). Until then it stays off, and on Vercel its uploads are refused even if the flag is on.
 
 ## Unverified integrations
 

@@ -1,22 +1,40 @@
 import { BlobNotFoundError, del, get, head, issueSignedToken, presignUrl, put, type IssuedSignedToken } from "@vercel/blob";
+import type { BlobCredentials } from "../config";
+import { ConfigurationError } from "../errors";
 import type { StorageProvider } from "./index";
 
 /**
  * Vercel Blob with private access: objects are only readable with credentials.
- * Authenticates with a read-write token when one is configured, otherwise via
- * OIDC (VERCEL_OIDC_TOKEN + BLOB_STORE_ID, resolved by the SDK).
+ * Every call names its store explicitly (a read-write token, or OIDC with a
+ * store id), so the SDK never falls back to whichever store the environment
+ * happens to describe.
  */
 export class VercelBlobStorage implements StorageProvider {
-  readonly name = "vercel-blob";
   readonly supportsDirectUpload = true;
   readonly directUploadFlow: "client-token" | "presigned";
-  constructor(private token: string | null) {
+  constructor(
+    readonly name: string,
+    private credentials: BlobCredentials,
+    private webhookPublicKey: string | null = null,
+  ) {
     // Client tokens are HMAC-signed with the read-write token; OIDC uses presigned URLs instead.
-    this.directUploadFlow = token ? "client-token" : "presigned";
+    this.directUploadFlow = "token" in credentials ? "client-token" : "presigned";
   }
 
-  private get auth(): { token?: string } {
-    return this.token ? { token: this.token } : {};
+  private get auth(): { token: string } | { storeId: string } {
+    return "token" in this.credentials ? { token: this.credentials.token } : { storeId: this.credentials.storeId };
+  }
+
+  /**
+   * What the upload route hands the SDK's upload handler for this store. The
+   * presigned handler requires a webhook key even though this app never
+   * accepts upload callbacks; passing this store's own key stops the SDK from
+   * reading another store's key from the environment.
+   */
+  directUploadAuth(): { token: string } | { webhookPublicKey: string } {
+    if ("token" in this.credentials) return { token: this.credentials.token };
+    if (!this.webhookPublicKey) throw new ConfigurationError("Direct uploads aren't fully configured on this server.");
+    return { webhookPublicKey: this.webhookPublicKey };
   }
 
   async put(key: string, body: Uint8Array, contentType: string): Promise<void> {

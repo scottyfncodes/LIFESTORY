@@ -5,7 +5,7 @@ import { recordAudit } from "./audit";
 import { requireProjectAccess } from "./authz";
 import { enqueueJob } from "./jobs";
 import { errorCode, log } from "./logger";
-import { getStorage } from "./storage";
+import { storageFor } from "./storage";
 
 /**
  * Deleting a project is two-phase so it fails closed and never leaves
@@ -31,14 +31,16 @@ export async function purgeDeletedProject(db: DbClient, projectId: string): Prom
   const assets = (await db.select().from(mediaAssets).where(and(eq(mediaAssets.projectId, projectId), isNull(mediaAssets.deletedAt)))).filter(
     (a) => a.storageProvider !== "pending",
   );
-  // Only touch storage when there is something stored: environments without a
-  // storage provider must still be able to delete projects that have no audio.
-  const storage = assets.length > 0 ? await getStorage() : null;
+  // Each file is removed from the store it was saved to. Environments without
+  // storage can still delete projects that have no audio; a file whose store
+  // isn't configured counts as a failure, so the job retries rather than
+  // dropping the only record of where that file is.
   let removed = 0;
   let failed = 0;
   for (const asset of assets) {
     try {
-      await storage!.delete(asset.storageKey);
+      const storage = await storageFor(asset.storageProvider);
+      await storage.delete(asset.storageKey);
       await db.update(mediaAssets).set({ deletedAt: new Date(), retentionStatus: "deleted" }).where(eq(mediaAssets.id, asset.id));
       removed += 1;
     } catch (error) {
@@ -64,11 +66,10 @@ export async function expireRetainedAudio(db: DbClient, limit = 50): Promise<num
   const now = Date.now();
   const expired = due.filter((a) => a.retainUntil && a.retainUntil.getTime() < now).slice(0, limit);
   if (expired.length === 0) return 0;
-  const storage = await getStorage();
   let count = 0;
   for (const asset of expired) {
     try {
-      if (asset.storageProvider !== "pending") await storage.delete(asset.storageKey);
+      if (asset.storageProvider !== "pending") await (await storageFor(asset.storageProvider)).delete(asset.storageKey);
       await db.update(mediaAssets).set({ deletedAt: new Date(), retentionStatus: "deleted" }).where(eq(mediaAssets.id, asset.id));
       count += 1;
     } catch (error) {

@@ -1,7 +1,6 @@
 import { apiHandler } from "@/server/api";
 import { NotFoundError } from "@/server/errors";
 import { parseRange } from "@/server/http-range";
-import { getStorage } from "@/server/storage";
 import { getRecordingPlayback } from "@/server/weave/service";
 
 const NO_STORE = { "cache-control": "private, no-store", "x-content-type-options": "nosniff", "referrer-policy": "no-referrer" };
@@ -16,8 +15,7 @@ export const GET = apiHandler<{ projectId: string; weaveId: string; recordingId:
   if (target.kind === "redirect") {
     return new Response(null, { status: 302, headers: { location: target.url, ...NO_STORE } });
   }
-  const storage = await getStorage();
-  const { size, contentType, storageKey } = target;
+  const { storage, size, contentType, storageKey } = target;
   const common = { "content-type": contentType, "accept-ranges": "bytes", "content-disposition": "inline", ...NO_STORE };
   const range = parseRange(request.headers.get("range"), size);
   if (range === "invalid") {

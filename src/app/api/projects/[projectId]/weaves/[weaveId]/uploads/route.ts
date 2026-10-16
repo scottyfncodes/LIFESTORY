@@ -1,14 +1,14 @@
 import { handleUpload, handleUploadPresigned, type HandleUploadBody, type HandleUploadPresignedBody } from "@vercel/blob/client";
 import { apiHandler, json } from "@/server/api";
-import { blobAuthMode, storageProviderName } from "@/server/config";
 import { AppError, ValidationError } from "@/server/errors";
 import { enforceRateLimit } from "@/server/rate-limit";
+import { getWeaveStorage } from "@/server/storage";
 import { assertWeaveEnabled, authorizeDirectUpload, grantPresignedUpload } from "@/server/weave/service";
 
 /**
  * Step 2 (Blob storage): lets the browser upload one reserved recording
- * straight to private storage. Two equivalent flows, chosen by how the store
- * is connected:
+ * straight to Conversation Weave's private store (never the interview store).
+ * Two equivalent flows, chosen by how that store is connected:
  *  - read-write token: a short-lived client token (`handleUpload`);
  *  - OIDC: a presigned upload URL from a write-only delegation (`handleUploadPresigned`).
  * Both are bound to the reserved path, declared type and size, and expire
@@ -19,7 +19,8 @@ import { assertWeaveEnabled, authorizeDirectUpload, grantPresignedUpload } from 
 export const POST = apiHandler<{ projectId: string; weaveId: string }>(async ({ db, user, request }, { projectId, weaveId }) => {
   assertWeaveEnabled();
   await enforceRateLimit(db, "weaveUpload", user.id);
-  if (storageProviderName() !== "vercel-blob") throw new AppError("direct_upload_unavailable", "Direct uploads aren't available on this server.", 409);
+  const storage = await getWeaveStorage();
+  if (!storage.supportsDirectUpload || !storage.directUploadAuth) throw new AppError("direct_upload_unavailable", "Direct uploads aren't available on this server.", 409);
   let body: HandleUploadBody | HandleUploadPresignedBody;
   try {
     body = (await request.json()) as HandleUploadBody | HandleUploadPresignedBody;
@@ -28,22 +29,26 @@ export const POST = apiHandler<{ projectId: string; weaveId: string }>(async ({ 
   }
   if (typeof (body?.payload as { pathname?: unknown } | undefined)?.pathname !== "string") throw new ValidationError("Unsupported upload request.");
 
-  if (body.type === "blob.generate-client-token" && blobAuthMode() === "token") {
+  // This store's own credentials, passed explicitly so the SDK can't fall
+  // back to the interview store's environment variables.
+  const auth = storage.directUploadAuth();
+
+  if (body.type === "blob.generate-client-token" && "token" in auth) {
     const result = await handleUpload({
       request,
       body,
-      token: process.env.BLOB_READ_WRITE_TOKEN,
+      token: auth.token,
       onBeforeGenerateToken: (pathname, clientPayload) => authorizeDirectUpload(db, user.id, projectId, weaveId, pathname, clientPayload),
     });
     return json(result);
   }
 
-  if (body.type === "blob.generate-presigned-url" && blobAuthMode() === "oidc") {
-    // The SDK insists on this key even though callbacks are never accepted here.
-    if (!process.env.BLOB_WEBHOOK_PUBLIC_KEY) throw new AppError("not_configured", "Direct uploads aren't fully configured on this server.", 503);
+  if (body.type === "blob.generate-presigned-url" && "webhookPublicKey" in auth) {
+    // The SDK insists on a webhook key even though callbacks are never accepted here.
     const result = await handleUploadPresigned({
       request,
       body,
+      webhookPublicKey: auth.webhookPublicKey,
       getSignedToken: (pathname, clientPayload) => grantPresignedUpload(db, user.id, projectId, weaveId, pathname, clientPayload),
     });
     return json(result);
