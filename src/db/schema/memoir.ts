@@ -38,6 +38,7 @@ import {
   consentStatusEnum,
   jobStatusEnum,
   jobTypeEnum,
+  mediaPurposeEnum,
 } from "./enums";
 
 const timestamps = {
@@ -207,6 +208,11 @@ export const mediaAssets = pgTable(
     processingError: text("processing_error"),
     retentionStatus: retentionStatusEnum("retention_status").notNull().default("retained"),
     retainUntil: timestamp("retain_until", { withTimezone: true }),
+    /** Interview answers by default; Conversation Weave originals are `weave_source`. */
+    purpose: mediaPurposeEnum("purpose").notNull().default("interview_answer"),
+    originalFilename: text("original_filename"),
+    /** Originals that automatic audio retention must never delete. Only the user removes them. */
+    retentionExempt: boolean("retention_exempt").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true })
       .defaultNow()

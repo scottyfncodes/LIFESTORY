@@ -159,8 +159,12 @@ export async function retryTranscription(db: DbClient, userId: string, projectId
   return transcribeAsset(db, asset, bytes, asset.mediaType);
 }
 
+/**
+ * Interview recordings only. Conversation Weave originals are reachable solely
+ * through the weave routes, which enforce the feature flag and immutability.
+ */
 export async function getAssetForProject(db: DbClient, projectId: string, assetId: string): Promise<MediaAsset> {
-  const asset = await db.query.mediaAssets.findFirst({ where: and(eq(mediaAssets.id, assetId), eq(mediaAssets.projectId, projectId)) });
+  const asset = await db.query.mediaAssets.findFirst({ where: and(eq(mediaAssets.id, assetId), eq(mediaAssets.projectId, projectId), eq(mediaAssets.purpose, "interview_answer")) });
   if (!asset || asset.deletedAt) throw new NotFoundError("We couldn't find that recording.");
   return asset;
 }

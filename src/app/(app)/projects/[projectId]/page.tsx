@@ -1,11 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowRight, BookOpen, Clock, MessageCircle, Users } from "lucide-react";
+import { ArrowRight, AudioLines, BookOpen, Clock, MessageCircle, Users } from "lucide-react";
 import { getDb } from "@/db";
 import { ButtonLink } from "@/components/ui/button";
 import { Card, CardBody } from "@/components/ui/card";
 import { getProjectAccess } from "@/server/authz";
+import { isWeaveEnabled } from "@/server/config";
+import { listWeaves } from "@/server/weave/service";
 import { requireUser } from "@/server/session";
 import { getProjectOverview } from "@/server/overview";
 import { countReviewItems } from "@/server/memory/service";
@@ -25,6 +27,7 @@ export default async function ProjectOverviewPage({ params }: { params: Promise<
   const overview = await getProjectOverview(db, projectId);
   const reviewCount = access.permissions.has("memory:write") ? await countReviewItems(db, projectId) : 0;
   const { project } = access;
+  const weaves = isWeaveEnabled() ? await listWeaves(db, user.id, projectId) : null;
   const scope = INTENDED_SCOPES.find((s) => s.value === project.intendedScope)?.label ?? project.intendedScope;
 
   return (
@@ -55,11 +58,12 @@ export default async function ProjectOverviewPage({ params }: { params: Promise<
         </Notice>
       ) : null}
 
-      <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className={`mt-6 grid gap-4 sm:grid-cols-2 ${weaves ? "lg:grid-cols-5" : "lg:grid-cols-4"}`}>
         <Tile href={`/projects/${project.id}/interview`} icon={MessageCircle} title="Interview" text={overview.sessionCount === 0 ? "No sessions yet" : `${overview.sessionCount} session${overview.sessionCount === 1 ? "" : "s"}`} />
         <Tile href={`/projects/${project.id}/timeline`} icon={Clock} title="Timeline" text={overview.eventCount === 0 ? "Events appear as you talk" : `${overview.eventCount} event${overview.eventCount === 1 ? "" : "s"} noted`} />
         <Tile href={`/projects/${project.id}/people`} icon={Users} title="People" text={overview.peopleCount === 0 ? "No one mentioned yet" : `${overview.peopleCount} ${overview.peopleCount === 1 ? "person" : "people"}`} />
         <Tile href={`/projects/${project.id}/book`} icon={BookOpen} title="My Book" text={overview.chapterCount === 0 ? "Chapters come from your answers" : `${overview.chapterCount} chapter${overview.chapterCount === 1 ? "" : "s"}`} />
+        {weaves ? <Tile href={`/projects/${project.id}/weaves`} icon={AudioLines} title="Conversations" text={weaves.length === 0 ? "Add recorded conversations" : `${weaves.length} conversation${weaves.length === 1 ? "" : "s"}`} /> : null}
       </div>
 
       <section className="mt-8 grid gap-6 lg:grid-cols-5">

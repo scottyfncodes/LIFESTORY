@@ -43,4 +43,5 @@ Legend: **Working** = implemented and covered by automated tests; **Partial** = 
 | Durable jobs (after + cron), backoff, stale-lock recovery | Working | Cron is hourly; `after()` handles the common path. |
 | Health endpoint | Working | |
 | Remote interviews (separate narrator accounts, invitations) | Unavailable | Schema and authorization ready; no UI by design. |
+| Conversation Weave W1: conversations, participants, consent, private direct upload of originals, verification, playback with seeking, dates/notes, deletion, export | Working behind `WEAVE_ENABLED` (off everywhere by default) | Integration and e2e (iPhone + desktop) with local storage; the Blob direct-upload and presigned-playback paths are exercised with the real SDK token generator and test doubles only, not against a live store. Transcription and weaving are later phases. |
 | Real-iPhone verification | Unavailable from this environment | See `docs/QA-IPHONE.md`. |

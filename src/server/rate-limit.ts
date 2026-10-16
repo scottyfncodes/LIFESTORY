@@ -8,6 +8,7 @@ export const RATE_LIMITS = {
   answer: { limit: 60, windowSeconds: 60 },
   aiQuestion: { limit: 30, windowSeconds: 60 },
   upload: { limit: 20, windowSeconds: 60 },
+  weaveUpload: { limit: 120, windowSeconds: 3600 },
   transcription: { limit: 20, windowSeconds: 60 },
   draft: { limit: 10, windowSeconds: 300 },
   export: { limit: 6, windowSeconds: 300 },

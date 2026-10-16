@@ -1,4 +1,4 @@
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq, isNull } from "drizzle-orm";
 import type { DbClient } from "@/db";
 import {
   consentRecords,
@@ -13,6 +13,9 @@ import {
   people,
   relationships,
   storyThreads,
+  weaveParticipants,
+  weaveRecordings,
+  weaves,
 } from "@/db/schema";
 import { requireProjectAccess } from "../authz";
 
@@ -20,14 +23,16 @@ import { requireProjectAccess } from "../authz";
  * Complete, machine-readable export of a project: settings, every answer
  * (original and corrected), memory records with their sources, and every
  * manuscript revision. Recordings are referenced by id, not embedded.
+ * Conversation Weave records are included whenever they exist, even if the
+ * feature has since been switched off, so nothing the user made is withheld.
  */
 export async function exportProjectData(db: DbClient, userId: string, projectId: string) {
   const access = await requireProjectAccess(db, userId, projectId, "export");
   const { project } = access;
-  const [sessions, turns, media, persons, rels, events, facts, threads, chapters, revisions, sources, consents] = await Promise.all([
+  const [sessions, turns, media, persons, rels, events, facts, threads, chapters, revisions, sources, consents, weaveRows, weaveParticipantRows, weaveRecordingRows] = await Promise.all([
     db.select().from(interviewSessions).where(eq(interviewSessions.projectId, projectId)).orderBy(asc(interviewSessions.startedAt)),
     db.select().from(interviewTurns).where(eq(interviewTurns.projectId, projectId)).orderBy(asc(interviewTurns.createdAt), asc(interviewTurns.sequenceNumber)),
-    db.select({ id: mediaAssets.id, turnId: mediaAssets.interviewTurnId, mediaType: mediaAssets.mediaType, durationSeconds: mediaAssets.durationSeconds, status: mediaAssets.processingStatus, retentionStatus: mediaAssets.retentionStatus, createdAt: mediaAssets.createdAt, deletedAt: mediaAssets.deletedAt }).from(mediaAssets).where(eq(mediaAssets.projectId, projectId)),
+    db.select({ id: mediaAssets.id, turnId: mediaAssets.interviewTurnId, purpose: mediaAssets.purpose, originalFilename: mediaAssets.originalFilename, mediaType: mediaAssets.mediaType, fileSize: mediaAssets.fileSize, durationSeconds: mediaAssets.durationSeconds, status: mediaAssets.processingStatus, retentionStatus: mediaAssets.retentionStatus, retentionExempt: mediaAssets.retentionExempt, createdAt: mediaAssets.createdAt, deletedAt: mediaAssets.deletedAt }).from(mediaAssets).where(eq(mediaAssets.projectId, projectId)),
     db.select().from(people).where(eq(people.projectId, projectId)),
     db.select().from(relationships).where(eq(relationships.projectId, projectId)),
     db.select().from(lifeEvents).where(eq(lifeEvents.projectId, projectId)),
@@ -37,6 +42,9 @@ export async function exportProjectData(db: DbClient, userId: string, projectId:
     db.select().from(manuscriptRevisions).where(eq(manuscriptRevisions.projectId, projectId)).orderBy(asc(manuscriptRevisions.createdAt)),
     db.select().from(manuscriptSources),
     db.select({ consentType: consentRecords.consentType, consentStatus: consentRecords.consentStatus, policyVersion: consentRecords.policyVersion, recordedAt: consentRecords.recordedAt, revokedAt: consentRecords.revokedAt }).from(consentRecords).where(eq(consentRecords.projectId, projectId)),
+    db.select().from(weaves).where(and(eq(weaves.projectId, projectId), isNull(weaves.deletedAt))).orderBy(asc(weaves.createdAt)),
+    db.select().from(weaveParticipants).where(eq(weaveParticipants.projectId, projectId)).orderBy(asc(weaveParticipants.position)),
+    db.select().from(weaveRecordings).where(and(eq(weaveRecordings.projectId, projectId), isNull(weaveRecordings.deletedAt))).orderBy(asc(weaveRecordings.position)),
   ]);
   const revisionIds = new Set(revisions.map((r) => r.id));
   return {
@@ -64,6 +72,18 @@ export async function exportProjectData(db: DbClient, userId: string, projectId:
     events,
     facts,
     threads,
+    weaves: weaveRows.map((w) => ({
+      id: w.id,
+      title: w.title,
+      contextNote: w.contextNote,
+      status: w.status,
+      participantConsentAt: w.participantConsentAt,
+      createdAt: w.createdAt,
+      participants: weaveParticipantRows.filter((p) => p.weaveId === w.id).map((p) => ({ displayName: p.displayName, personId: p.personId, isAccountHolder: p.isAccountHolder })),
+      recordings: weaveRecordingRows
+        .filter((r) => r.weaveId === w.id)
+        .map((r) => ({ id: r.id, mediaAssetId: r.mediaAssetId, status: r.status, originalFilename: r.originalFilename, mimeType: r.declaredMimeType, size: r.declaredSize, durationSeconds: r.declaredDurationSeconds, recordedOn: r.recordedOn, recordedOnPrecision: r.recordedOnPrecision, contextNote: r.contextNote, uploadedAt: r.completedAt })),
+    })),
     chapters: chapters.map((c) => ({ ...c, revisions: revisions.filter((r) => r.chapterId === c.id).map((r) => ({ ...r, sourceTurnIds: sources.filter((s) => s.revisionId === r.id && revisionIds.has(r.id)).map((s) => s.sourceTurnId) })) })),
   };
 }
