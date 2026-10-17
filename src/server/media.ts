@@ -8,7 +8,7 @@ import { requireProjectAccess } from "./authz";
 import { limits } from "./config";
 import { AppError, NotFoundError, ValidationError } from "./errors";
 import { errorCode, log } from "./logger";
-import { buildMediaKey, getStorage, isStorageAvailable } from "./storage";
+import { buildMediaKey, getStorage, isStorageAvailable, storageFor } from "./storage";
 import { getTranscriptionProvider } from "./transcription";
 
 export const ALLOWED_AUDIO_TYPES: Record<string, string> = {
@@ -152,7 +152,8 @@ export async function transcribeAsset(
 export async function retryTranscription(db: DbClient, userId: string, projectId: string, assetId: string) {
   await requireProjectAccess(db, userId, projectId, "interview:write");
   const asset = await getAssetForProject(db, projectId, assetId);
-  const storage = await getStorage();
+  if (asset.storageProvider === "pending") throw new NotFoundError("The recording is no longer available.");
+  const storage = await storageFor(asset.storageProvider);
   const file = await storage.get(asset.storageKey);
   if (!file) throw new NotFoundError("The recording is no longer available.");
   const bytes = file.body instanceof Uint8Array ? file.body : new Uint8Array(await new Response(file.body).arrayBuffer());
@@ -172,8 +173,8 @@ export async function getAssetForProject(db: DbClient, projectId: string, assetI
 export async function readAsset(db: DbClient, userId: string, projectId: string, assetId: string) {
   await requireProjectAccess(db, userId, projectId, "project:read");
   const asset = await getAssetForProject(db, projectId, assetId);
-  if (asset.processingStatus === "pending_upload") throw new NotFoundError("The recording is not available.");
-  const storage = await getStorage();
+  if (asset.processingStatus === "pending_upload" || asset.storageProvider === "pending") throw new NotFoundError("The recording is not available.");
+  const storage = await storageFor(asset.storageProvider);
   const file = await storage.get(asset.storageKey);
   if (!file) throw new NotFoundError("The recording is no longer available.");
   return { asset, file };
@@ -184,7 +185,7 @@ export async function deleteAssetAudio(db: DbClient, userId: string, projectId: 
   await requireProjectAccess(db, userId, projectId, "interview:write");
   const asset = await getAssetForProject(db, projectId, assetId);
   if (asset.storageProvider !== "pending") {
-    const storage = await getStorage();
+    const storage = await storageFor(asset.storageProvider);
     await storage.delete(asset.storageKey).catch((error) => log.warn("media.delete_failed", { assetId, code: errorCode(error) }));
   }
   await db.update(mediaAssets).set({ deletedAt: new Date(), retentionStatus: "deleted" }).where(eq(mediaAssets.id, assetId));

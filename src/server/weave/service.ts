@@ -15,7 +15,7 @@ import { requireProjectAccess, isUuid, type Permission } from "../authz";
 import { isWeaveEnabled, weaveLimits } from "../config";
 import { AppError, ForbiddenError, NotFoundError, ValidationError } from "../errors";
 import { errorCode, log } from "../logger";
-import { buildWeaveMediaKey, getStorage, type StorageProvider } from "../storage";
+import { buildWeaveMediaKey, getWeaveStorage, storageFor, type StorageProvider } from "../storage";
 import { bytesMatchAudioType } from "../upload-sniff";
 
 export const WEAVE_CONSENT_POLICY = "weave-participants-v1";
@@ -169,12 +169,13 @@ export async function deleteWeave(db: DbClient, userId: string, projectId: strin
   const assets = assetIds.length
     ? (await db.select().from(mediaAssets).where(and(inArray(mediaAssets.id, assetIds), isNull(mediaAssets.deletedAt)))).filter((a) => a.storageProvider !== "pending")
     : [];
-  const storage = assets.length > 0 ? await getStorage() : null;
   let removed = 0;
   let failed = 0;
   for (const asset of assets) {
     try {
-      await storage!.delete(asset.storageKey);
+      // Each original is removed from the store it was saved to.
+      const storage = await storageFor(asset.storageProvider);
+      await storage.delete(asset.storageKey);
       await db.update(mediaAssets).set({ deletedAt: new Date(), retentionStatus: "deleted" }).where(eq(mediaAssets.id, asset.id));
       removed += 1;
     } catch (error) {
@@ -219,16 +220,18 @@ export async function reserveRecording(
   const existing = await db.query.weaveRecordings.findFirst({ where: and(eq(weaveRecordings.weaveId, weave.id), eq(weaveRecordings.clientUploadId, input.clientUploadId)) });
   if (existing) {
     if (existing.deletedAt) throw new ValidationError("That upload was removed. Choose the file again to add it.");
-    const storage = await getStorage();
+    if (existing.status !== "awaiting_upload" && existing.status !== "failed") return { recording: toRecordingView(existing), upload: null };
     const asset = await db.query.mediaAssets.findFirst({ where: eq(mediaAssets.id, existing.mediaAssetId) });
-    return { recording: toRecordingView(existing), upload: existing.status === "awaiting_upload" || existing.status === "failed" ? instructions(storage, asset!.storageKey, existing.declaredMimeType, existing.declaredSize) : null };
+    const storage = await uploadStorageFor(asset!);
+    return { recording: toRecordingView(existing), upload: instructions(storage, asset!.storageKey, existing.declaredMimeType, existing.declaredSize) };
   }
 
   const [{ n }] = await db.select({ n: count() }).from(weaveRecordings).where(and(eq(weaveRecordings.weaveId, weave.id), isNull(weaveRecordings.deletedAt)));
   if (Number(n) >= maxRecordingsPerWeave) throw new ValidationError(`A conversation can hold up to ${maxRecordingsPerWeave} recordings.`);
 
-  // Fails with a clear "not configured" error on a deployment without private storage.
-  const storage = await getStorage();
+  // Weave's own store. Fails with a clear "not configured" error on a
+  // deployment without one; interview audio storage is never used.
+  const storage = await getWeaveStorage();
   const extension = WEAVE_AUDIO_TYPES[contentType].extension;
   const assetId = crypto.randomUUID();
   const storageKey = buildWeaveMediaKey(projectId, weave.id, assetId, extension);
@@ -275,6 +278,20 @@ export async function reserveRecording(
   return { recording: toRecordingView(recording), upload: instructions(storage, storageKey, contentType, input.size) };
 }
 
+/**
+ * Where bytes for a reserved recording may be written: always the current
+ * Weave store, and only if the recording was reserved in that same store. An
+ * unfinished upload from before a storage change has to be started again, so
+ * an original is never written somewhere its record doesn't point to.
+ */
+async function uploadStorageFor(asset: { storageProvider: string }): Promise<StorageProvider> {
+  const storage = await getWeaveStorage();
+  if (asset.storageProvider !== storage.name) {
+    throw new AppError("upload_restart_required", "This upload needs to start again. Remove it and add the file again.", 409);
+  }
+  return storage;
+}
+
 function instructions(storage: StorageProvider, storageKey: string, contentType: string, size: number): UploadInstructions {
   if (storage.supportsDirectUpload) {
     return { mode: "direct", flow: storage.directUploadFlow ?? "client-token", pathname: storageKey, contentType, multipart: size > 8 * 1024 * 1024 };
@@ -307,6 +324,7 @@ export async function authorizeDirectUpload(
   if (recording.status !== "awaiting_upload" && recording.status !== "failed") {
     throw new AppError("already_uploaded", "This recording is already stored. Originals can't be replaced.", 409);
   }
+  await uploadStorageFor(asset);
   return {
     allowedContentTypes: [recording.declaredMimeType],
     maximumSizeInBytes: Math.min(recording.declaredSize, weaveLimits().maxUploadBytes),
@@ -332,7 +350,8 @@ export async function grantPresignedUpload(
   clientPayload: string | null,
 ) {
   const grant = await authorizeDirectUpload(db, userId, projectId, weaveId, pathname, clientPayload);
-  const storage = await getStorage();
+  // authorizeDirectUpload has checked the recording was reserved in this store.
+  const storage = await getWeaveStorage();
   if (storage.directUploadFlow !== "presigned" || !storage.signedUploadToken) {
     throw new AppError("direct_upload_unavailable", "Direct uploads aren't available on this server.", 409);
   }
@@ -355,11 +374,11 @@ export async function uploadRecordingContent(
 ): Promise<void> {
   const weave = await requireWeave(db, userId, projectId, weaveId, "interview:write");
   const { recording, asset } = await requireRecording(db, weave, recordingId);
-  const storage = await getStorage();
-  if (storage.supportsDirectUpload) throw new AppError("direct_upload_required", "Upload this recording directly to storage.", 409);
   if (recording.status !== "awaiting_upload" && recording.status !== "failed") {
     throw new AppError("already_uploaded", "This recording is already stored. Originals can't be replaced.", 409);
   }
+  const storage = await uploadStorageFor(asset);
+  if (storage.supportsDirectUpload) throw new AppError("direct_upload_required", "Upload this recording directly to storage.", 409);
   if (bytes.length > recording.declaredSize || bytes.length > weaveLimits().maxUploadBytes) {
     throw new ValidationError("The file is larger than declared.");
   }
@@ -382,7 +401,8 @@ export async function completeRecording(db: DbClient, userId: string, projectId:
   const { recording, asset } = await requireRecording(db, weave, recordingId);
   if (recording.status !== "awaiting_upload" && recording.status !== "failed") return toRecordingView(recording);
 
-  const storage = await getStorage();
+  // Checked in the store the recording was reserved in (the only place it could have been uploaded to).
+  const storage = await storageFor(asset.storageProvider);
   if (!storage.stat || !storage.readRange) throw new AppError("not_configured", "This storage provider can't verify uploads.", 503);
   const info = await storage.stat(asset.storageKey);
   if (!info) throw new AppError("upload_incomplete", "We haven't received this recording yet. Please try uploading it again.", 409);
@@ -449,7 +469,7 @@ export async function deleteRecording(db: DbClient, userId: string, projectId: s
   const weave = await requireWeave(db, userId, projectId, weaveId, "interview:write");
   const { recording, asset } = await requireRecording(db, weave, recordingId);
   if (asset.storageProvider !== "pending") {
-    const storage = await getStorage();
+    const storage = await storageFor(asset.storageProvider);
     try {
       await storage.delete(asset.storageKey);
     } catch (error) {
@@ -465,19 +485,19 @@ export async function deleteRecording(db: DbClient, userId: string, projectId: s
 
 export type PlaybackTarget =
   | { kind: "redirect"; url: string }
-  | { kind: "local"; storageKey: string; size: number; contentType: string };
+  | { kind: "local"; storage: StorageProvider; storageKey: string; size: number; contentType: string };
 
 /** Where the browser should fetch audio from. Never a public URL. */
 export async function getRecordingPlayback(db: DbClient, userId: string, projectId: string, weaveId: string, recordingId: string): Promise<PlaybackTarget> {
   const weave = await requireWeave(db, userId, projectId, weaveId, "project:read");
   const { recording, asset } = await requireRecording(db, weave, recordingId);
   if (recording.status === "awaiting_upload" || recording.status === "failed") throw new NotFoundError("That recording isn't available yet.");
-  const storage = await getStorage();
+  const storage = await storageFor(asset.storageProvider);
   if (storage.signedReadUrl) {
     return { kind: "redirect", url: await storage.signedReadUrl(asset.storageKey, weaveLimits().playbackUrlTtlSeconds) };
   }
   if (!storage.stat) throw new AppError("not_configured", "Playback isn't available on this server.", 503);
   const info = await storage.stat(asset.storageKey);
   if (!info) throw new NotFoundError("That recording isn't available.");
-  return { kind: "local", storageKey: asset.storageKey, size: info.size, contentType: recording.declaredMimeType };
+  return { kind: "local", storage, storageKey: asset.storageKey, size: info.size, contentType: recording.declaredMimeType };
 }

@@ -78,12 +78,18 @@ PW_CHROMIUM_PATH=/path/to/chromium pnpm test:e2e   # Playwright, iPhone + deskto
 
 Conversation Weave stores original recordings, which can be hundreds of megabytes, so browsers upload them **directly to private Vercel Blob storage** with a short-lived token scoped to one file; the bytes never pass through a serverless function.
 
-1. In Vercel → Storage, create a Blob store with **private** access for **Preview** and a **separate** private store for **Production**. Connect each to the `lifestory` project for its environment only. Either connection style works:
-   - **OIDC (Vercel's default for new stores):** Vercel adds `BLOB_STORE_ID` and `BLOB_WEBHOOK_PUBLIC_KEY`; the runtime's short-lived `VERCEL_OIDC_TOKEN` authenticates, and Vercel refuses OIDC from environments the store isn't connected to. Browser uploads use presigned upload URLs.
-   - **Read-write token:** `BLOB_READ_WRITE_TOKEN`. Browser uploads use client tokens. If both are present the token is used.
-2. In that environment set `STORAGE_PROVIDER=vercel-blob` and `WEAVE_ENABLED=1`, then redeploy. The flag is read at build time for the Content-Security-Policy (it adds `https://vercel.com/api/blob/` to `connect-src` and `https://*.private.blob.vercel-storage.com` to `media-src`) and at request time for pages and APIs.
-3. Migration `0003_weave_recordings` must be applied (`pnpm db:migrate`). It only adds tables, enum types and three defaulted columns on `media_assets`.
-4. Check: create a conversation, upload an M4A from an iPhone, play it and seek, then delete the conversation and confirm the object is gone from the Blob store browser.
+Originals live in **their own private Blob store**, separate from interview audio (`BLOB_*` above), with one store per environment. The app reads Weave storage only from `WEAVE_BLOB_*` and never falls back to the interview store: on Vercel, without these variables, conversation uploads are refused (`/api/health` shows `"weaveStorage": "none"`) and interview audio is unaffected.
+
+1. In Vercel → Storage, create a Blob store with **private** access for **Preview** and a **separate** private store for **Production**. Connect each to the `lifestory` project for **its environment only**; OIDC only works from environments the store is connected to.
+2. In that environment, give the app the Weave store's details under the `WEAVE_` names. Neither value is a secret.
+   - **OIDC (Vercel's default):** `WEAVE_BLOB_STORE_ID` (the store id) and `WEAVE_BLOB_WEBHOOK_PUBLIC_KEY` (the store's webhook public key). Browser uploads use presigned URLs. The upload SDK requires the key, though this app never accepts upload callbacks. Weave over OIDC is refused while `BLOB_READ_WRITE_TOKEN` is also set: if the OIDC token were ever unavailable, the SDK would fall back to that token's store.
+   - **Read-write token:** `WEAVE_BLOB_READ_WRITE_TOKEN`. Browser uploads use client tokens.
+   - If connecting the store also added the default names (`BLOB_STORE_ID`, …) pointing at the Weave store, interview uploads stay off: a default store that is the Weave store is treated as no store.
+3. Set `WEAVE_ENABLED=1`, then redeploy. The flag is read at build time for the Content-Security-Policy (it adds `https://vercel.com/api/blob/` to `connect-src` and `https://*.private.blob.vercel-storage.com` to `media-src`) and at request time for pages and APIs.
+4. Migration `0003_weave_recordings` must be applied (`pnpm db:migrate`). It only adds tables, enum types and three defaulted columns on `media_assets`.
+5. Check: `/api/health` shows `"weaveStorage": "vercel-blob:weave"`. Then create a conversation, upload an M4A from an iPhone, play it and seek, delete the conversation, and confirm in the **Weave** store's browser that the object is gone (and that nothing was written to the interview store).
+
+Each file's store is recorded with it (`media_assets.storage_provider`: `vercel-blob:weave` for Weave originals, `vercel-blob` for interview audio and any original saved before the split, `local` in development), and reads and deletions always go to that store. If that store isn't configured, the operation fails rather than trying another store; project deletion retries until it can reach every file.
 
 Without a Blob store (local development and e2e), uploads go through `PUT …/content` to local storage and playback streams with Range support.
 

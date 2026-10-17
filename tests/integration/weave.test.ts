@@ -6,7 +6,7 @@ import { auditEvents, consentRecords, mediaAssets, memoirProjects, weaveParticip
 import { createTestUser, setupTestDb, teardownTestDb } from "../helpers/db";
 import { createProject } from "@/server/projects";
 import { __setStorageForTests, type StorageProvider } from "@/server/storage";
-import { AppError, ForbiddenError, NotFoundError, ValidationError } from "@/server/errors";
+import { AppError, ConfigurationError, ForbiddenError, NotFoundError, ValidationError } from "@/server/errors";
 import { expireRetainedAudio, purgeAllOwnedProjects, purgeDeletedProject, requestProjectDeletion } from "@/server/deletion";
 import { exportProjectData } from "@/server/export/project-data";
 import { deleteAssetAudio, readAsset, retryTranscription } from "@/server/media";
@@ -29,7 +29,7 @@ import {
 
 /** In-memory stand-in for private storage. `direct` mimics Vercel Blob (browser uploads + signed reads). */
 class MemoryStorage implements StorageProvider {
-  readonly name = "memory";
+  constructor(readonly name = "memory") {}
   objects = new Map<string, { body: Uint8Array; contentType: string }>();
   supportsDirectUpload = false;
   failDeletes = false;
@@ -521,5 +521,119 @@ describe("export", () => {
     // Still exported after the feature is switched off: nothing the user made is withheld.
     delete process.env.WEAVE_ENABLED;
     expect((await exportProjectData(db, alice.id, projectId)).weaves).toHaveLength(1);
+  });
+});
+
+describe("separate Weave store", () => {
+  // Stand-ins for the two Blob stores, named as the real providers are.
+  const interviewStore = new MemoryStorage("vercel-blob");
+  const weaveStore = new MemoryStorage("vercel-blob:weave");
+
+  beforeEach(() => {
+    interviewStore.objects.clear();
+    weaveStore.objects.clear();
+    __setStorageForTests({ default: interviewStore, weave: weaveStore });
+  });
+  afterEach(() => {
+    __setStorageForTests(storage);
+  });
+
+  async function interviewAudio(projectId: string, key = `projects/${projectId}/recordings/${crypto.randomUUID()}.webm`) {
+    await interviewStore.put(key, new Uint8Array([1, 2, 3]), "audio/webm");
+    const [asset] = await db
+      .insert(mediaAssets)
+      .values({ projectId, uploadedByUserId: alice.id, storageKey: key, storageProvider: "vercel-blob", mediaType: "audio/webm", processingStatus: "uploaded" })
+      .returning();
+    return asset;
+  }
+
+  it("keeps originals in the Weave store and interview audio in the default store", async () => {
+    const projectId = await newProject();
+    const weave = await newWeave(projectId);
+    const { recording } = await addRecording(projectId, weave.id);
+    const original = await assetFor(recording.id);
+    expect(original.storageProvider).toBe("vercel-blob:weave");
+    expect(weaveStore.objects.has(original.storageKey)).toBe(true);
+    expect(interviewStore.objects.has(original.storageKey)).toBe(false);
+
+    const answer = await interviewAudio(projectId);
+    const { file } = await readAsset(db, alice.id, projectId, answer.id);
+    expect(file.size).toBe(3);
+    expect(weaveStore.objects.has(answer.storageKey)).toBe(false);
+  });
+
+  it("deletes every file from the store it was saved in, including originals from before the split", async () => {
+    const projectId = await newProject();
+    const weave = await newWeave(projectId);
+    const { recording } = await addRecording(projectId, weave.id);
+    const original = await assetFor(recording.id);
+    // An original saved before Weave had its own store is recorded as "vercel-blob".
+    const { recording: older } = await addRecording(projectId, weave.id);
+    const legacy = await assetFor(older.id);
+    const bytes = weaveStore.objects.get(legacy.storageKey)!;
+    weaveStore.objects.delete(legacy.storageKey);
+    interviewStore.objects.set(legacy.storageKey, bytes);
+    await db.update(mediaAssets).set({ storageProvider: "vercel-blob" }).where(eq(mediaAssets.id, legacy.id));
+
+    await deleteWeave(db, alice.id, projectId, weave.id);
+    expect(weaveStore.objects.has(original.storageKey)).toBe(false);
+    expect(interviewStore.objects.has(legacy.storageKey)).toBe(false);
+  });
+
+  it("project deletion removes interview audio and originals from their own stores", async () => {
+    const projectId = await newProject();
+    const weave = await newWeave(projectId);
+    const { recording } = await addRecording(projectId, weave.id);
+    const original = await assetFor(recording.id);
+    const answer = await interviewAudio(projectId);
+    await requestProjectDeletion(db, alice.id, projectId);
+    await purgeDeletedProject(db, projectId);
+    expect(weaveStore.objects.size).toBe(0);
+    expect(interviewStore.objects.has(answer.storageKey)).toBe(false);
+    expect(await db.query.mediaAssets.findFirst({ where: eq(mediaAssets.id, original.id) })).toBeUndefined();
+  });
+
+  it("without a Weave store, uploads are refused and purges retry, while interview audio keeps working", async () => {
+    const projectId = await newProject();
+    const weave = await newWeave(projectId);
+    const { recording } = await addRecording(projectId, weave.id);
+    const original = await assetFor(recording.id);
+    const answer = await interviewAudio(projectId);
+
+    __setStorageForTests({ default: interviewStore });
+    await expect(reserveRecording(db, alice.id, projectId, weave.id, { clientUploadId: uploadId(), filename: "b.m4a", mimeType: "audio/mp4", size: M4A.length })).rejects.toBeInstanceOf(ConfigurationError);
+    await expect(getRecordingPlayback(db, alice.id, projectId, weave.id, recording.id)).rejects.toBeInstanceOf(ConfigurationError);
+    expect((await readAsset(db, alice.id, projectId, answer.id)).file.size).toBe(3);
+
+    // The original can't be reached, so the purge fails and keeps every record of it.
+    await requestProjectDeletion(db, alice.id, projectId);
+    await expect(purgeDeletedProject(db, projectId)).rejects.toThrow();
+    expect((await db.query.mediaAssets.findFirst({ where: eq(mediaAssets.id, original.id) }))?.deletedAt).toBeNull();
+    expect(await db.query.memoirProjects.findFirst({ where: eq(memoirProjects.id, projectId) })).toBeDefined();
+    expect(weaveStore.objects.has(original.storageKey)).toBe(true);
+
+    // Once the store is back, the retry finishes the job.
+    __setStorageForTests({ default: interviewStore, weave: weaveStore });
+    await purgeDeletedProject(db, projectId);
+    expect(weaveStore.objects.has(original.storageKey)).toBe(false);
+    expect(await db.query.memoirProjects.findFirst({ where: eq(memoirProjects.id, projectId) })).toBeUndefined();
+  });
+
+  it("an unfinished upload reserved in another store has to start again", async () => {
+    const projectId = await newProject();
+    const weave = await newWeave(projectId);
+    const clientUploadId = uploadId();
+    const { recording } = await reserveRecording(db, alice.id, projectId, weave.id, { clientUploadId, filename: "c.m4a", mimeType: "audio/mp4", size: M4A.length });
+    const asset = await assetFor(recording.id);
+    await db.update(mediaAssets).set({ storageProvider: "vercel-blob" }).where(eq(mediaAssets.id, asset.id));
+
+    const restart = { code: "upload_restart_required", status: 409 };
+    await expect(reserveRecording(db, alice.id, projectId, weave.id, { clientUploadId, filename: "c.m4a", mimeType: "audio/mp4", size: M4A.length })).rejects.toMatchObject(restart);
+    await expect(uploadRecordingContent(db, alice.id, projectId, weave.id, recording.id, M4A)).rejects.toMatchObject(restart);
+    await expect(authorizeDirectUpload(db, alice.id, projectId, weave.id, asset.storageKey, JSON.stringify({ recordingId: recording.id }))).rejects.toMatchObject(restart);
+    expect(interviewStore.objects.has(asset.storageKey)).toBe(false);
+    expect(weaveStore.objects.has(asset.storageKey)).toBe(false);
+    // It can still be removed.
+    await deleteRecording(db, alice.id, projectId, weave.id, recording.id);
   });
 });

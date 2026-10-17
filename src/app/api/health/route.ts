@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 import { getDb, isDatabaseConfigured } from "@/db";
-import { aiProviderName, storageProviderName, transcriptionProviderName } from "@/server/config";
+import { aiProviderName, storageProviderName, transcriptionProviderName, weaveStorageProviderName } from "@/server/config";
 import { isAuthConfigured } from "@/lib/auth";
 
 /** Operational status without secrets: which capabilities are configured and whether the database answers. */
@@ -22,6 +22,8 @@ export async function GET() {
     ai: aiProviderName(),
     transcription: transcriptionProviderName(),
     storage: storageProviderName(),
+    // Conversation Weave originals have their own store; "none" means their uploads are refused.
+    weaveStorage: weaveStorageProviderName(),
     version: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? "dev",
   };
   return Response.json(body, { status: body.status === "ok" ? 200 : 503, headers: { "cache-control": "no-store" } });
