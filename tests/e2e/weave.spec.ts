@@ -145,3 +145,135 @@ test("conversation weave: a stalled upload stops with Retry, and Retry completes
   const detail = await (await page.request.get(`/api/projects/${projectId}/weaves/${weaveId}`)).json();
   expect(detail.recordings).toHaveLength(1);
 });
+
+test("conversation weave: playback resumes and seeks in place after the storage link expires", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "Timing-based; one viewport is enough.");
+  test.setTimeout(180_000);
+  // The page's clock is controlled so a pause of more than five minutes takes no real time.
+  await page.clock.install();
+  await signUp(page);
+  const projectId = await createProject(page, "Weave Playback Test");
+  await page.goto(`/projects/${projectId}/weaves/new`);
+  await page.getByLabel("What was this conversation?").fill("Long listen");
+  await page.getByLabel("Person 2").fill("June");
+  await page.getByRole("checkbox").check();
+  await page.getByRole("button", { name: "Create conversation" }).click();
+  await expect(page).toHaveURL(/\/weaves\/[0-9a-f-]{36}$/, { timeout: 45_000 });
+
+  // Ten minutes of audio (4.8 MB): more than one 4 MB response, so later
+  // positions need another request, as a long recording would on Blob.
+  await page.getByTestId("weave-file-input").setInputFiles([{ name: "long.wav", mimeType: "audio/wav", buffer: wav(600) }]);
+  const card = page.getByTestId("recording-card").filter({ hasText: "long.wav" });
+  await expect(card).toHaveAttribute("data-status", "uploaded", { timeout: 60_000 });
+  const audio = card.locator("audio");
+
+  // Storage links stop working once "expired", as presigned Blob links do.
+  const expired = new Set<string>();
+  const requested: string[] = [];
+  let refused = 0;
+  await page.route("**/recordings/*/audio*", async (route) => {
+    const url = route.request().url();
+    requested.push(url);
+    if (expired.has(url)) {
+      refused += 1;
+      return route.fulfill({ status: 403, body: "expired" });
+    }
+    await route.continue();
+  });
+  const expireAllLinks = () => requested.forEach((url) => expired.add(url));
+  const state = () => audio.evaluate((el: HTMLAudioElement & { probe?: boolean }) => ({ time: el.currentTime, paused: el.paused, same: el.probe === true }));
+
+  await audio.evaluate((el: HTMLAudioElement & { probe?: boolean }) => {
+    el.probe = true; // lost if the element is replaced
+    return el.play();
+  });
+  await expect.poll(async () => (await state()).time, { timeout: 15_000 }).toBeGreaterThan(1.5);
+  await audio.evaluate((el: HTMLAudioElement) => el.pause());
+  const pausedAt = (await state()).time;
+
+  // 1. A pause of more than five minutes, then resume: continues from the same place on a fresh link.
+  expireAllLinks();
+  await page.clock.fastForward("06:00");
+  await audio.evaluate((el: HTMLAudioElement) => el.play().catch(() => {}));
+  await expect.poll(async () => (await state()).time, { timeout: 15_000 }).toBeGreaterThan(pausedAt + 0.5);
+  let now = await state();
+  expect(now.same).toBe(true);
+  expect(now.paused).toBe(false);
+
+  // Seeking far ahead (outside the first response) lands there, not back at 0:00.
+  await audio.evaluate((el: HTMLAudioElement) => { el.currentTime = 550; });
+  await expect.poll(async () => (await state()).time, { timeout: 15_000 }).toBeGreaterThan(550.5);
+  expect((await state()).same).toBe(true);
+  // The expired link was never used: a fresh one was fetched before it ran out.
+  expect(requested.some((url) => url.endsWith("?r=1"))).toBe(true);
+  expect(refused).toBe(0);
+
+  // 2. The link stops working without warning: the refused request is replaced and the seek lands.
+  await audio.evaluate((el: HTMLAudioElement) => el.pause());
+  // A position the browser hasn't buffered, so it has to ask storage again.
+  const target = await audio.evaluate((el: HTMLAudioElement) => {
+    let end = 0;
+    for (let i = 0; i < el.buffered.length; i += 1) {
+      if (el.buffered.start(i) - end > 6) break;
+      end = el.buffered.end(i);
+    }
+    return Math.floor(end + 3);
+  });
+  expect(target).toBeLessThan(590);
+  expireAllLinks();
+  await audio.evaluate((el: HTMLAudioElement, t: number) => { el.currentTime = t; }, target);
+  await expect.poll(() => refused, { timeout: 15_000 }).toBeGreaterThan(0);
+  await expect.poll(async () => requested.some((url) => url.endsWith("?r=2")), { timeout: 15_000 }).toBe(true);
+  await expect.poll(async () => Math.round((await state()).time), { timeout: 15_000 }).toBe(target);
+  now = await state();
+  expect(now.same).toBe(true);
+  expect(now.paused).toBe(true);
+  await audio.evaluate((el: HTMLAudioElement) => el.play());
+  await expect.poll(async () => (await state()).time, { timeout: 15_000 }).toBeGreaterThan(target + 0.5);
+  await expect(card.getByText("couldn’t be loaded")).toHaveCount(0);
+});
+
+test("conversation weave: a storage link refused mid-play keeps playing from the same place", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "Timing-based; one viewport is enough.");
+  test.setTimeout(180_000);
+  await signUp(page);
+  const projectId = await createProject(page, "Weave Mid-play Test");
+  await page.goto(`/projects/${projectId}/weaves/new`);
+  await page.getByLabel("What was this conversation?").fill("Mid-play");
+  await page.getByLabel("Person 2").fill("June");
+  await page.getByRole("checkbox").check();
+  await page.getByRole("button", { name: "Create conversation" }).click();
+  await expect(page).toHaveURL(/\/weaves\/[0-9a-f-]{36}$/, { timeout: 45_000 });
+  await page.getByTestId("weave-file-input").setInputFiles([{ name: "long.wav", mimeType: "audio/wav", buffer: wav(600) }]);
+  const card = page.getByTestId("recording-card").filter({ hasText: "long.wav" });
+  await expect(card).toHaveAttribute("data-status", "uploaded", { timeout: 60_000 });
+  const audio = card.locator("audio");
+
+  // The first link answers once, then is refused, as an expired link would be
+  // for a browser that fetches the rest of the file later.
+  let firstLinkUses = 0;
+  let refused = 0;
+  await page.route("**/recordings/*/audio*", async (route) => {
+    if (!route.request().url().includes("?r=")) {
+      firstLinkUses += 1;
+      if (firstLinkUses > 1) {
+        refused += 1;
+        return route.fulfill({ status: 403, body: "expired" });
+      }
+    }
+    await route.continue();
+  });
+  const state = () => audio.evaluate((el: HTMLAudioElement & { probe?: boolean }) => ({ time: el.currentTime, paused: el.paused, same: el.probe === true }));
+  await audio.evaluate((el: HTMLAudioElement & { probe?: boolean }) => {
+    el.probe = true;
+    return el.play();
+  });
+  await expect.poll(async () => (await state()).time, { timeout: 15_000 }).toBeGreaterThan(1);
+  // Past the first 4 MB response, while playing.
+  await audio.evaluate((el: HTMLAudioElement) => { el.currentTime = 560; });
+  await expect.poll(() => refused, { timeout: 15_000 }).toBeGreaterThan(0);
+  await expect.poll(async () => (await state()).time, { timeout: 15_000 }).toBeGreaterThan(561);
+  const now = await state();
+  expect(now.same).toBe(true);
+  expect(now.paused).toBe(false);
+});

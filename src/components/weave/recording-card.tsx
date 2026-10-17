@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AlertTriangle, ChevronDown, FileAudio } from "lucide-react";
 import { apiFetch, ApiError } from "@/lib/api-client";
 import { DATE_PRECISIONS } from "@/lib/validation/weave";
@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/field";
 import { FormMessage } from "@/components/ui/form-message";
 import { FAILURE_TEXT, formatBytes, formatLength } from "./format";
+import { attachPlaybackRecovery, type PlaybackRecovery } from "./playback-recovery";
 import type { RecordingDto } from "./upload-recording";
 
 export function RecordingCard({
@@ -15,6 +16,7 @@ export function RecordingCard({
   weaveId,
   recording,
   canWrite,
+  playbackLinkSeconds,
   onChange,
   onRemoved,
 }: {
@@ -22,6 +24,7 @@ export function RecordingCard({
   weaveId: string;
   recording: RecordingDto;
   canWrite: boolean;
+  playbackLinkSeconds: number | null;
   onChange: (next: RecordingDto) => void;
   onRemoved: () => void;
 }) {
@@ -31,8 +34,25 @@ export function RecordingCard({
   const [confirming, setConfirming] = useState(false);
   const [removing, setRemoving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [audioKey, setAudioKey] = useState(0);
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const recovery = useRef<PlaybackRecovery | null>(null);
+  const [playbackFailed, setPlaybackFailed] = useState(false);
   const length = formatLength(recording.durationSeconds);
+
+  useEffect(() => {
+    const media = audioRef.current;
+    if (!media) return;
+    const attached = attachPlaybackRecovery(media, {
+      url: `${base}/audio`,
+      linkTtlSeconds: playbackLinkSeconds,
+      onGiveUp: () => setPlaybackFailed(true),
+    });
+    recovery.current = attached;
+    return () => {
+      attached.detach();
+      recovery.current = null;
+    };
+  }, [base, stored, playbackLinkSeconds]);
 
   async function remove() {
     setRemoving(true);
@@ -70,18 +90,28 @@ export function RecordingCard({
 
       {stored ? (
         // preload="none": nothing is fetched until the listener presses play.
-        // Seeking works through Range requests; if a short-lived storage link
-        // has expired, reloading the element asks the server for a fresh one.
-        <audio
-          key={audioKey}
-          className="mt-3 w-full"
-          controls
-          preload="none"
-          src={`${base}/audio${audioKey ? `?r=${audioKey}` : ""}`}
-          onError={() => setAudioKey((k) => (k < 3 ? k + 1 : k))}
-        >
-          Your browser can&rsquo;t play this recording.
-        </audio>
+        // Seeking works through Range requests. The source is set by
+        // attachPlaybackRecovery, which swaps in a fresh link when a short-lived
+        // storage link expires, keeping the element and the listener's place.
+        <>
+          <audio
+            ref={audioRef}
+            className="mt-3 w-full"
+            controls
+            preload="none"
+            onPlaying={() => setPlaybackFailed(false)}
+          >
+            Your browser can&rsquo;t play this recording.
+          </audio>
+          {playbackFailed ? (
+            <p className="mt-1 text-[0.85rem] text-ink-2" role="status">
+              This recording couldn&rsquo;t be loaded.{" "}
+              <button type="button" className="underline" onClick={() => { setPlaybackFailed(false); recovery.current?.retry(); }}>
+                Try again
+              </button>
+            </p>
+          ) : null}
+        </>
       ) : null}
 
       {recording.contextNote && !open ? <p className="mt-2 whitespace-pre-wrap text-[0.9rem] leading-relaxed text-ink-2">{recording.contextNote}</p> : null}
