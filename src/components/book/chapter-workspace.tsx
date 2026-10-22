@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { AlertTriangle, ArrowLeft, History, Link2, Pencil, RotateCcw, Sparkles, Trash2 } from "lucide-react";
+import { AlertTriangle, ArrowLeft, History, Link2, Pencil, RotateCcw, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button, Spinner } from "@/components/ui/button";
 import { Input, Textarea } from "@/components/ui/field";
@@ -155,7 +155,7 @@ export function ChapterWorkspace({ projectId, initial, canEdit, aiEnabled, chapt
             {mode === "read" ? <Button variant="ghost" onClick={() => setMode("meta")}>Title &amp; focus</Button> : null}
             {aiEnabled && mode === "read" ? (
               <Button onClick={() => requestDraft(null)} loading={busy === "drafting" || drafting} disabled={detail.sources.length + detail.plannedSources.length === 0}>
-                <Sparkles className="h-4 w-4" aria-hidden /> {detail.current ? "Redraft from sources" : "Draft this chapter"}
+                {detail.current ? "Redraft from sources" : "Draft this chapter"}
               </Button>
             ) : null}
           </div>
