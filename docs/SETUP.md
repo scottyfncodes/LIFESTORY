@@ -95,11 +95,11 @@ Without a Blob store (local development and e2e), uploads go through `PUT …/co
 
 ## 8. Deploy
 
-The GitHub repository `scottyfncodes/LIFESTORY` is linked to Vercel project `lifestory` (team `nocodo`). Pushes to `main` deploy to production; pull requests get preview deployments (protected by Vercel Authentication; team members can open them).
+The GitHub repository `scottyfncodes/LIFESTORY` is linked to Vercel project `lifestory` (team `haveanapp`). Pushes to `main` deploy to production; pull requests get preview deployments (protected by Vercel Authentication; team members can open them).
 
 ## 9. Verify production
 
-- `https://lifestory-nocodo.vercel.app/api/health` → `{"status":"ok","database":"ok",...}`
+- `https://lifestory-hazel.vercel.app/api/health` → `{"status":"ok","database":"ok",...}`
 - Sign up, create a memoir, answer a question, reload, confirm it persisted.
 - Check Vercel → Logs for `job.succeeded` entries after an answer.
 
