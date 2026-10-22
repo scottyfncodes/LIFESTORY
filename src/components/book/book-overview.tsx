@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { ArrowDown, ArrowUp, BookOpen, Download, Eye, Plus, Sparkles } from "lucide-react";
+import { ArrowDown, ArrowUp, BookOpen, Download, Eye, Plus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -61,7 +61,7 @@ export function BookOverview({ projectId, chapters, canEdit, aiEnabled, answerCo
       <div className="flex flex-wrap items-center gap-2">
         {canEdit && aiEnabled ? (
           <Button onClick={() => call(() => apiFetch<{ created: number; updated: number }>(`/api/projects/${projectId}/chapters`, { method: "POST", body: JSON.stringify({ action: "propose" }) }), (r) => setMessage(r.created > 0 ? `Proposed ${r.created} new chapter${r.created === 1 ? "" : "s"}.` : "Your chapters already cover the saved answers."))} loading={pending} disabled={answerCount === 0}>
-            <Sparkles className="h-4 w-4" aria-hidden /> {chapters.length === 0 ? "Propose chapters" : "Look for new chapters"}
+            {chapters.length === 0 ? "Propose chapters" : "Look for new chapters"}
           </Button>
         ) : null}
         {canEdit ? (

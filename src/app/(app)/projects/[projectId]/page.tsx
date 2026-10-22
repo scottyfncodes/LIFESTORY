@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowRight, AudioLines, BookOpen, Clock, MessageCircle, Users } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { getDb } from "@/db";
 import { ButtonLink } from "@/components/ui/button";
 import { Card, CardBody } from "@/components/ui/card";
@@ -59,11 +59,11 @@ export default async function ProjectOverviewPage({ params }: { params: Promise<
       ) : null}
 
       <div className={`mt-6 grid gap-4 sm:grid-cols-2 ${weaves ? "lg:grid-cols-5" : "lg:grid-cols-4"}`}>
-        <Tile href={`/projects/${project.id}/interview`} icon={MessageCircle} title="Interview" text={overview.sessionCount === 0 ? "No sessions yet" : `${overview.sessionCount} session${overview.sessionCount === 1 ? "" : "s"}`} />
-        <Tile href={`/projects/${project.id}/timeline`} icon={Clock} title="Timeline" text={overview.eventCount === 0 ? "Events appear as you talk" : `${overview.eventCount} event${overview.eventCount === 1 ? "" : "s"} noted`} />
-        <Tile href={`/projects/${project.id}/people`} icon={Users} title="People" text={overview.peopleCount === 0 ? "No one mentioned yet" : `${overview.peopleCount} ${overview.peopleCount === 1 ? "person" : "people"}`} />
-        <Tile href={`/projects/${project.id}/book`} icon={BookOpen} title="My Book" text={overview.chapterCount === 0 ? "Chapters come from your answers" : `${overview.chapterCount} chapter${overview.chapterCount === 1 ? "" : "s"}`} />
-        {weaves ? <Tile href={`/projects/${project.id}/weaves`} icon={AudioLines} title="Conversations" text={weaves.length === 0 ? "Add recorded conversations" : `${weaves.length} conversation${weaves.length === 1 ? "" : "s"}`} /> : null}
+        <Tile href={`/projects/${project.id}/interview`} title="Interview" text={overview.sessionCount === 0 ? "No sessions yet" : `${overview.sessionCount} session${overview.sessionCount === 1 ? "" : "s"}`} />
+        <Tile href={`/projects/${project.id}/timeline`} title="Timeline" text={overview.eventCount === 0 ? "Events appear as you talk" : `${overview.eventCount} event${overview.eventCount === 1 ? "" : "s"} noted`} />
+        <Tile href={`/projects/${project.id}/people`} title="People" text={overview.peopleCount === 0 ? "No one mentioned yet" : `${overview.peopleCount} ${overview.peopleCount === 1 ? "person" : "people"}`} />
+        <Tile href={`/projects/${project.id}/book`} title="My Book" text={overview.chapterCount === 0 ? "Chapters come from your answers" : `${overview.chapterCount} chapter${overview.chapterCount === 1 ? "" : "s"}`} />
+        {weaves ? <Tile href={`/projects/${project.id}/weaves`} title="Conversations" text={weaves.length === 0 ? "Add recorded conversations" : `${weaves.length} conversation${weaves.length === 1 ? "" : "s"}`} /> : null}
       </div>
 
       <section className="mt-8 grid gap-6 lg:grid-cols-5">
@@ -111,12 +111,9 @@ export default async function ProjectOverviewPage({ params }: { params: Promise<
   );
 }
 
-function Tile({ href, icon: Icon, title, text }: { href: string; icon: typeof BookOpen; title: string; text: string }) {
+function Tile({ href, title, text }: { href: string; title: string; text: string }) {
   return (
-    <Link href={href} className="flex items-start gap-3 rounded-[var(--radius-lg)] border border-line bg-white/80 p-4 transition-colors hover:border-line-2 hover:bg-white">
-      <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-clay-soft text-clay">
-        <Icon className="h-4 w-4" aria-hidden />
-      </span>
+    <Link href={href} className="block rounded-[var(--radius-lg)] border border-line bg-white/80 p-4 transition-colors hover:border-line-2 hover:bg-white">
       <span className="min-w-0">
         <span className="block font-medium text-ink">{title}</span>
         <span className="block text-[0.85rem] text-ink-3">{text}</span>

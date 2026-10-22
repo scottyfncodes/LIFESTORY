@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, BookOpen, Lock, Mic, PenLine, Users } from "lucide-react";
+import { ArrowRight, Mic, PenLine } from "lucide-react";
 import { ButtonLink } from "@/components/ui/button";
 
 export default function LandingPage() {
@@ -73,17 +73,34 @@ export default function LandingPage() {
       </section>
 
       <section className="mx-auto w-full max-w-6xl px-4 py-12 sm:px-6 lg:py-16">
-        <div className="grid gap-6 sm:grid-cols-3">
-          <Feature icon={BookOpen} title="For yourself" text="Interview yourself in an ongoing conversation that picks up where you left off." />
-          <Feature icon={Users} title="With family" text="Sit beside a parent or grandparent and run the interview together on one device." />
-          <Feature icon={Lock} title="Private by design" text="Projects are private to you. You can export everything or delete it at any time." />
+        <h2 className="font-serif text-[1.7rem] text-ink">Two ways to begin</h2>
+        <div className="mt-6 grid gap-8 border-t border-line pt-6 sm:grid-cols-2 sm:gap-12">
+          <div>
+            <h3 className="font-serif text-[1.25rem] text-ink">For yourself</h3>
+            <p className="mt-1.5 text-[0.975rem] leading-relaxed text-ink-2">
+              Interview yourself in an ongoing conversation that picks up where you left off.
+            </p>
+            <Link href="/sign-up?intent=self" className="mt-3 inline-block text-[0.95rem] font-medium text-clay hover:text-clay-2">
+              Tell my story
+            </Link>
+          </div>
+          <div>
+            <h3 className="font-serif text-[1.25rem] text-ink">With family</h3>
+            <p className="mt-1.5 text-[0.975rem] leading-relaxed text-ink-2">
+              Sit beside a parent or grandparent and run the interview together on one device.
+            </p>
+            <Link href="/sign-up?intent=host" className="mt-3 inline-block text-[0.95rem] font-medium text-clay hover:text-clay-2">
+              Help someone tell theirs
+            </Link>
+          </div>
         </div>
         <div className="mt-10 rounded-[var(--radius-lg)] border border-line bg-white p-6 sm:p-8">
           <h2 className="font-serif text-[1.5rem] text-ink">Your story belongs to you</h2>
           <p className="mt-2 max-w-3xl text-[0.975rem] leading-relaxed text-ink-2">
             Recordings and transcripts are stored privately and only processed to transcribe your
             words and draft your book. We don&rsquo;t sell, advertise against, or train models on your
-            memoir. AI-written passages can contain mistakes, which is why every one links back to
+            memoir. Projects are private to you, and you can export everything or delete it at any
+            time. AI-written passages can contain mistakes, which is why every one links back to
             what you said and waits for your review.
           </p>
           <Link href="/privacy" className="mt-4 inline-flex items-center gap-1.5 text-[0.95rem] font-medium text-clay hover:text-clay-2">
@@ -91,18 +108,6 @@ export default function LandingPage() {
           </Link>
         </div>
       </section>
-    </div>
-  );
-}
-
-function Feature({ icon: Icon, title, text }: { icon: typeof BookOpen; title: string; text: string }) {
-  return (
-    <div className="rounded-[var(--radius-lg)] border border-line bg-white/70 p-5">
-      <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-clay-soft text-clay">
-        <Icon className="h-5 w-5" aria-hidden />
-      </span>
-      <h3 className="mt-4 font-serif text-[1.25rem] text-ink">{title}</h3>
-      <p className="mt-1.5 text-[0.95rem] leading-relaxed text-ink-2">{text}</p>
     </div>
   );
 }

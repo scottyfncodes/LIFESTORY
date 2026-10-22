@@ -7,6 +7,7 @@
 - Schema changes: edit `src/db/schema/*.ts`, run `pnpm db:generate`, commit the migration. Never edit applied migrations.
 - Tests run on in-memory PGlite (`tests/helpers/db.ts`). Use the fixture AI/transcription providers; no test may call a paid API.
 - Run `pnpm typecheck && pnpm lint && pnpm test` before pushing; `pnpm test:e2e` for UI changes.
+- UI work must follow the design guardrails in `CLAUDE.md`.
 
 <!-- BEGIN:nextjs-agent-rules -->
 
