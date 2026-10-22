@@ -2,8 +2,8 @@
 
 *A life worth remembering.* LifeStory by HaveAnApp interviews people about their lives, keeps their memories in structured form, and turns them into an editable memoir in their own voice.
 
-- Production: https://lifestory-nocodo.vercel.app
-- Health: https://lifestory-nocodo.vercel.app/api/health
+- Production: https://lifestory-hazel.vercel.app
+- Health: https://lifestory-hazel.vercel.app/api/health
 
 ## Documentation
 
