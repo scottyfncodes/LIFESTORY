@@ -80,18 +80,12 @@ export default function LandingPage() {
             <p className="mt-1.5 text-[0.975rem] leading-relaxed text-ink-2">
               Interview yourself in an ongoing conversation that picks up where you left off.
             </p>
-            <Link href="/sign-up?intent=self" className="mt-3 inline-block text-[0.95rem] font-medium text-clay hover:text-clay-2">
-              Tell my story
-            </Link>
           </div>
           <div>
             <h3 className="font-serif text-[1.25rem] text-ink">With family</h3>
             <p className="mt-1.5 text-[0.975rem] leading-relaxed text-ink-2">
               Sit beside a parent or grandparent and run the interview together on one device.
             </p>
-            <Link href="/sign-up?intent=host" className="mt-3 inline-block text-[0.95rem] font-medium text-clay hover:text-clay-2">
-              Help someone tell theirs
-            </Link>
           </div>
         </div>
         <div className="mt-10 rounded-[var(--radius-lg)] border border-line bg-white p-6 sm:p-8">
