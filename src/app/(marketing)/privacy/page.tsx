@@ -19,7 +19,9 @@ export default function PrivacyPage() {
         </section>
         <section>
           <h2 className="font-serif text-[1.4rem] text-ink">Usage counts</h2>
-          <p className="mt-2">LifeStory counts page views with HaveAnApp Pulse so we can see which pages get used. It records the page path (project and chapter ids are replaced with a placeholder), the referring site, and a rough device, browser and country. It sets no cookies, stores no IP address, and never sees your answers, recordings or book. Browsers that send Do Not Track or Global Privacy Control are not counted.</p>
+          <p className="mt-2">LifeStory counts page views with Pulse, an analytics service run by HaveAnApp, so we can see which pages get used. When a page loads, your browser sends Pulse the page address and the address of the page you came from. Like any website, Pulse&rsquo;s server, hosted by Vercel, also sees your IP address and browser details.</p>
+          <p className="mt-2">From that, Pulse keeps the page path (ids such as project and chapter ids are replaced with a placeholder, and anything after a &ldquo;?&rdquo; is dropped), the domain of the site that linked you if it was another site, any campaign tags in the link, the time, your country, your device type, browser and operating system, and a visitor code. The visitor code is made by scrambling your IP address and browser details with a random value that is replaced every day, so it changes daily and is not linked to your account. Pulse does not store your IP address or full browser details, sets no cookies, and never receives your answers, recordings or book. These records are kept in a database hosted by Neon, and Pulse is set to delete them after 400 days.</p>
+          <p className="mt-2">Pulse does not count browsers that send Do Not Track or Global Privacy Control. To turn counting off on one device, open any LifeStory page with <code className="text-[0.9em]">?pulse=ignore</code> added to the address; your browser then keeps that one setting.</p>
         </section>
         <section>
           <h2 className="font-serif text-[1.4rem] text-ink">Recordings</h2>
