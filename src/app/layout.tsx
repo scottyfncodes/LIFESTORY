@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Newsreader, Source_Sans_3 } from "next/font/google";
+import Script from "next/script";
 import "./globals.css";
 
 const sourceSans = Source_Sans_3({
@@ -15,6 +16,8 @@ const newsreader = Newsreader({
   style: ["normal", "italic"],
   axes: ["opsz"],
 });
+
+const PULSE_ORIGIN = "https://haveanapp-pulse-collect.vercel.app";
 
 export const metadata: Metadata = {
   title: {
@@ -43,7 +46,11 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${sourceSans.variable} ${newsreader.variable}`}>
-      <body>{children}</body>
+      <body>
+        {children}
+        {/* HaveAnApp Pulse: anonymous, cookieless page view counts. Page paths only, never memoir content. */}
+        <Script src={`${PULSE_ORIGIN}/p.js`} data-app="lifestory" strategy="afterInteractive" />
+      </body>
     </html>
   );
 }

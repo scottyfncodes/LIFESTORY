@@ -18,6 +18,10 @@ export default function PrivacyPage() {
           <p className="mt-2">LifeStory does not use your memoir to train models, does not show advertising, and does not make private projects discoverable or indexable.</p>
         </section>
         <section>
+          <h2 className="font-serif text-[1.4rem] text-ink">Usage counts</h2>
+          <p className="mt-2">LifeStory counts page views with HaveAnApp Pulse so we can see which pages get used. It records the page path (project and chapter ids are replaced with a placeholder), the referring site, and a rough device, browser and country. It sets no cookies, stores no IP address, and never sees your answers, recordings or book. Browsers that send Do Not Track or Global Privacy Control are not counted.</p>
+        </section>
+        <section>
           <h2 className="font-serif text-[1.4rem] text-ink">Recordings</h2>
           <p className="mt-2">Audio is kept so you can re-check a transcript. By default a project keeps audio for 90 days after it was recorded, then deletes it while keeping the confirmed transcript. You can change this per project or delete any recording immediately.</p>
         </section>
