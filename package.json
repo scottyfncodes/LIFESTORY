@@ -13,7 +13,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "check": "pnpm lint && pnpm typecheck && pnpm test"
+    "check": "pnpm lint && pnpm typecheck && pnpm test",
+    "test:backup": "bash scripts/backup-db.test.sh",
+    "test:backup-blobs": "bash scripts/backup-blobs.test.sh"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.134.0",
