@@ -1,8 +1,9 @@
 import type { DbClient } from "@/db";
 import { usageEvents } from "@/db/schema";
 import { aiProviderName } from "../config";
-import { ConfigurationError } from "../errors";
+import { AiPausedError, ConfigurationError } from "../errors";
 import { errorCode, log } from "../logger";
+import { aiGlobalDailyLimit, consumeGlobalAiBudget, nextUtcMidnight, utcDay } from "../rate-limit";
 import { AnthropicProvider } from "./anthropic";
 import { FixtureProvider } from "./fixture";
 import type { AiProvider, AiResult } from "./types";
@@ -37,13 +38,22 @@ export function __setAiProviderForTests(provider: AiProvider | null): void {
 
 /**
  * Runs an AI operation and records content-free usage telemetry. Failures
- * are logged by code only and re-thrown for the caller to handle.
+ * are logged by code only and re-thrown for the caller to handle. Every AI
+ * call first takes one unit of the global daily budget; when it is spent no
+ * call is made and AiPausedError is thrown.
  */
 export async function withAiTelemetry<T>(
   db: DbClient,
   meta: { projectId: string | null; userId: string | null; operation: string; provider: string },
   run: () => Promise<AiResult<T>>,
 ): Promise<AiResult<T>> {
+  const now = new Date();
+  const limit = aiGlobalDailyLimit();
+  if (!(await consumeGlobalAiBudget(db, now, limit))) {
+    // Counts only: no user, project or content.
+    log.warn("ai.global_daily_limit_reached", { operation: meta.operation, limit, day: utcDay(now) });
+    throw new AiPausedError(nextUtcMidnight(now));
+  }
   const started = Date.now();
   try {
     const result = await run();

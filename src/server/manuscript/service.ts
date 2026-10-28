@@ -14,7 +14,8 @@ import { getAiProvider, requireAiProvider, withAiTelemetry } from "../ai";
 import { PROMPT_VERSION } from "../ai/prompts/v1";
 import { recordAudit } from "../audit";
 import { requireProjectAccess } from "../authz";
-import { AppError, NotFoundError, ValidationError } from "../errors";
+import { AiPausedError, AppError, NotFoundError, ValidationError } from "../errors";
+import { isGlobalAiBudgetSpent, nextUtcMidnight } from "../rate-limit";
 import { enqueueJob } from "../jobs";
 
 export type Chapter = typeof manuscriptChapters.$inferSelect;
@@ -209,6 +210,8 @@ export async function proposeChapters(db: DbClient, userId: string, projectId: s
 export async function requestDraft(db: DbClient, userId: string, projectId: string, chapterId: string, instructions: string | null): Promise<{ jobId: string | null }> {
   await requireProjectAccess(db, userId, projectId, "manuscript:write");
   if (!getAiProvider()) throw new AppError("not_configured", "Drafting needs an AI provider, which isn't configured on this server.", 503);
+  // Say so now rather than after the job is picked up.
+  if (await isGlobalAiBudgetSpent(db)) throw new AiPausedError(nextUtcMidnight(new Date()));
   const chapter = await db.query.manuscriptChapters.findFirst({ where: and(eq(manuscriptChapters.id, chapterId), eq(manuscriptChapters.projectId, projectId)) });
   if (!chapter) throw new NotFoundError("We couldn't find that chapter.");
   const trimmed = instructions?.trim().slice(0, 1000) || null;

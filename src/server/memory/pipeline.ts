@@ -13,6 +13,7 @@ import {
   storyThreads,
   type TurnMetadata,
 } from "@/db/schema";
+import { AiPausedError } from "../errors";
 import { getAiProvider, withAiTelemetry } from "../ai";
 import type { ExtractionResult } from "../ai/types";
 import { enqueueJob } from "../jobs";
@@ -80,7 +81,9 @@ export async function processTurn(db: DbClient, turnId: string): Promise<Record<
     );
     extraction = result.data;
   } catch (error) {
-    await setProcessing(db, turn.id, meta, "failed", "extraction_failed");
+    // Paused for the day: the answer is saved and the job runs again tomorrow.
+    if (error instanceof AiPausedError) await setProcessing(db, turn.id, meta, "pending", "ai_paused");
+    else await setProcessing(db, turn.id, meta, "failed", "extraction_failed");
     throw error;
   }
 

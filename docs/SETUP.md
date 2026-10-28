@@ -22,6 +22,7 @@ Copy `.env.example` to `.env.local` and fill in what you have. Every variable is
 | `BETTER_AUTH_URL`, `NEXT_PUBLIC_APP_URL` | production | Public origin, no trailing slash. Previews fall back to `VERCEL_URL`. |
 | `AI_PROVIDER` + `ANTHROPIC_API_KEY` | for AI features | `anthropic` enables the AI interviewer, memory extraction and drafting. `none` keeps the typed interview working with the built-in planner. |
 | `ANTHROPIC_MODEL` | optional | Defaults to `claude-opus-5-5`. |
+| `AI_GLOBAL_DAILY_LIMIT` | optional | Ceiling on AI calls per UTC day across all accounts (default 500; unset or not a whole number means 500, `0` pauses AI, there is no unlimited value). One answered question costs about 2.3 calls. When it is reached, the interview carries on with built-in questions, memory notes wait for the next day, drafting says it is paused, and the server logs `ai.global_daily_limit_reached`. Per-user limits still apply. |
 | `TRANSCRIPTION_PROVIDER` + key | for server transcription | `openai` (`OPENAI_API_KEY`, optional `OPENAI_TRANSCRIPTION_MODEL`) or `deepgram` (`DEEPGRAM_API_KEY`). `none` offers browser dictation instead. |
 | `STORAGE_PROVIDER` + `BLOB_READ_WRITE_TOKEN` | for recordings | `vercel-blob` with a **private** Blob store. `local` writes under `STORAGE_LOCAL_DIR` for development. |
 | `CRON_SECRET` | production | Bearer token for `/api/jobs/run`. Vercel supplies it to the cron automatically when set. |

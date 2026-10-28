@@ -2,7 +2,7 @@ import { and, eq, lte, sql } from "drizzle-orm";
 import type { DbClient } from "@/db";
 import { processingJobs } from "@/db/schema";
 import { errorCode, log } from "../logger";
-import { ProviderError } from "../errors";
+import { AiPausedError, ProviderError } from "../errors";
 
 export type JobType = (typeof processingJobs.$inferSelect)["jobType"];
 export type Job = typeof processingJobs.$inferSelect;
@@ -98,7 +98,17 @@ export async function runJob(db: DbClient, job: Job): Promise<void> {
     log.info("job.succeeded", { jobType: job.jobType, jobId: job.id, durationMs: Date.now() - started, attempts: job.attempts });
   } catch (error) {
     const code = errorCode(error);
-    const retryable = !(error instanceof ProviderError) || error.retryable;
+    if (error instanceof AiPausedError && job.jobType !== "draft_chapter") {
+      // Background AI work waits for tomorrow's budget and doesn't use up an attempt.
+      await db
+        .update(processingJobs)
+        .set({ status: "queued", runAfter: error.resumesAt, lockedAt: null, attempts: sql`greatest(${processingJobs.attempts} - 1, 0)`, lastErrorCode: code, lastErrorMessage: error.message })
+        .where(eq(processingJobs.id, job.id));
+      log.info("job.deferred", { jobType: job.jobType, jobId: job.id, code });
+      return;
+    }
+    // A draft someone is waiting on fails at once with the paused message.
+    const retryable = error instanceof AiPausedError ? false : !(error instanceof ProviderError) || error.retryable;
     const exhausted = job.attempts >= job.maxAttempts || !retryable;
     const backoffMs = Math.min(15 * 60 * 1000, 30_000 * 2 ** (job.attempts - 1));
     await db

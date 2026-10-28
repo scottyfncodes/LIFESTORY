@@ -66,6 +66,20 @@ export class ConfigurationError extends AppError {
   }
 }
 
+/** Today's global AI budget is spent. Nothing the user saved is affected. */
+export class AiPausedError extends AppError {
+  readonly resumesAt: Date;
+  constructor(resumesAt: Date) {
+    super(
+      "ai_paused",
+      "AI help is paused for today because LifeStory has reached its daily limit. Everything you've saved is safe. Please try again tomorrow.",
+      503,
+    );
+    this.name = "AiPausedError";
+    this.resumesAt = resumesAt;
+  }
+}
+
 export class ProviderError extends AppError {
   readonly provider: string;
   readonly retryable: boolean;
