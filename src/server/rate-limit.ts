@@ -55,6 +55,66 @@ export async function enforceRateLimit(
   }
 }
 
+/**
+ * Global ceiling on AI calls across every account, per UTC day. Sign-up is
+ * open and each call is a paid model request, so per-user limits alone don't
+ * bound spend. Override with AI_GLOBAL_DAILY_LIMIT; unset or not a whole
+ * number means the default, "0" pauses AI. There is no "unlimited" value.
+ *
+ * Default: one interview answer costs about 2.3 calls (next question, memory
+ * extraction, and a biography summary every third answer), so 500 calls is
+ * roughly 200 answers a day across everyone, plus some chapter drafting.
+ */
+export const DEFAULT_AI_GLOBAL_DAILY_LIMIT = 500;
+
+export function aiGlobalDailyLimit(env: Record<string, string | undefined> = process.env): number {
+  const raw = env.AI_GLOBAL_DAILY_LIMIT?.trim();
+  if (!raw) return DEFAULT_AI_GLOBAL_DAILY_LIMIT;
+  return /^\d+$/.test(raw) ? Number(raw) : DEFAULT_AI_GLOBAL_DAILY_LIMIT;
+}
+
+export function utcDay(now: Date): string {
+  return now.toISOString().slice(0, 10);
+}
+
+export function nextUtcMidnight(now: Date): Date {
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1));
+}
+
+const globalAiKey = (now: Date) => `aiGlobal:${utcDay(now)}`;
+
+/**
+ * Takes one call from today's global AI budget, using the same bucket table
+ * as the per-user limiter with a key per UTC day. Check and increment are one
+ * statement (the row is only bumped while under the limit), so parallel
+ * requests can't push it past the limit. Not affected by RATE_LIMITS_DISABLED.
+ * Returns false when today's budget is spent.
+ */
+export async function consumeGlobalAiBudget(db: DbClient, now = new Date(), limit = aiGlobalDailyLimit()): Promise<boolean> {
+  if (limit <= 0) return false;
+  const dayStart = new Date(`${utcDay(now)}T00:00:00Z`);
+  const result = await db.execute(sql`
+    insert into rate_limit_buckets (key, count, window_started_at)
+    values (${globalAiKey(now)}, 1, ${dayStart.toISOString()}::timestamptz)
+    on conflict (key) do update set count = rate_limit_buckets.count + 1
+    where rate_limit_buckets.count < ${limit}
+    returning count
+  `);
+  // Keep a week of daily totals; drop older ones.
+  void db
+    .execute(sql`delete from rate_limit_buckets where key like 'aiGlobal:%' and window_started_at < ${new Date(dayStart.getTime() - 7 * 86_400_000).toISOString()}::timestamptz`)
+    .catch(() => undefined);
+  return rowsOf(result).length > 0;
+}
+
+/** Read-only: true when today's global AI budget is already spent. */
+export async function isGlobalAiBudgetSpent(db: DbClient, now = new Date(), limit = aiGlobalDailyLimit()): Promise<boolean> {
+  if (limit <= 0) return true;
+  const result = await db.execute(sql`select count from rate_limit_buckets where key = ${globalAiKey(now)}`);
+  const row = rowsOf<{ count: number }>(result)[0];
+  return Number(row?.count ?? 0) >= limit;
+}
+
 function rowsOf<T>(result: unknown): T[] {
   if (Array.isArray(result)) return result as T[];
   if (result && typeof result === "object" && "rows" in result) {
