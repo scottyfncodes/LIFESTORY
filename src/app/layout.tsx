@@ -49,7 +49,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         {children}
         {/* HaveAnApp Pulse: anonymous, cookieless page view counts. Page paths only, never memoir content. */}
-        <Script src={`${PULSE_ORIGIN}/p.js`} data-app="lifestory" strategy="afterInteractive" />
+        <Script src={`${PULSE_ORIGIN}/p.js`} data-app="lifestory" data-returning="on" strategy="afterInteractive" />
       </body>
     </html>
   );
